@@ -7,9 +7,9 @@ description: Use when a /poteto-mode prompt says lean or yagni, or a task involv
 
 ## Overview
 
-Poteto routes. Ponytail bounds diff. Superpowers gates quality. Gates are superpowers-plugin skills; `ponytail` repo-local. Agent loads by ID.
+Poteto routes. Ponytail bounds diff. Superpowers gates quality. Gates are superpowers-plugin skills; `ponytail` is a ponytail-plugin skill. Agent loads each by ID.
 
-**REQUIRED:** poteto-mode; `ponytail` full first, each fired gate by ID; TDD every change; model from `pstack-models.md`.
+**REQUIRED:** poteto-mode; `ponytail` full first, each fired gate by ID; TDD every change; model from `.opencode/pstack-models.md`.
 
 ## When to Use
 
@@ -28,7 +28,7 @@ Not: read-only investigation, one-line edit.
 - Feature/plan: invoke `brainstorming`, smallest only.
 - Every change: RED first per `test-driven-development`, one watched fail-pass test.
 - Done: invoke `verification-before-completion` on artifact.
-- Spawn poteto-agent delegates, general for MCP, explore read-only. Briefs carry this file + role model. Model is role line `provider/model#variant`; omit when missing/`inherit-parent`/`auto`.
+- Spawn with the `subagent` tool: `agent: "poteto-agent"` delegates, `general` for MCP, `explore` read-only. Parallel workers: every call in one turn, each `background: true`; foreground calls run one at a time. Briefs carry this file + role model. Model is the role line `provider/model#variant`, copied exactly; omit when missing/`inherit-parent`/`auto`.
 
 ## Quick Reference
 
@@ -39,8 +39,8 @@ Not: read-only investigation, one-line edit.
 | Prototype fork | sketch decides, never AskQuestion |
 | Diff | smallest reuse: helper, stdlib, dep, else minimum |
 | Commit/review | deslop, no-comments, verification run |
-| Models (delegated) | hardest/deepseek#max; feature, bug-fix, perf-issue/inkling#max; chores/beam-free#max; missing omits model |
-| Fix loop | Critical/Important/spec-miss: resume 1-3, fresh+bump 4-5, max 5, tests+report+re-review; contested: one bakeoff; unclear: decide+ledger or ask once; Minor: deferred |
+| Models (delegated) | hardest `opencode-go/deepseek-v4.1-flash#max`; feature, bug-fix, perf-issue `opencode/inkling-2-small-free#max`; chores `opencode/beam-free#max`; `.opencode/pstack-models.md` wins on conflict; missing omits model |
+| Fix loop | Critical/Important/spec-miss: resume (same `sessionID`) 1-3, fresh+bump 4-5, max 5, tests+report+re-review; contested: one bakeoff; unclear: decide+ledger or ask once; Minor: deferred |
 | Plan gate | 2+ tasks/vague/shared names: names + Consumes/Produces + test first; one-line skips; coupled sequential |
 
 ## Implementation
