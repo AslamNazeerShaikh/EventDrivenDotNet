@@ -10,7 +10,7 @@
 ## Subagents
 
 - A loaded skill that prescribes subagents, delegation, or parallel workers is an explicit request for them. This covers the pstack skills (such as `poteto-mode`, `swarm`, `arena`, `interrogate`, `architect`, `how`, `why`, `reflect`, `no-comments`) and the superpowers skills (such as `dispatching-parallel-agents`, `subagent-driven-development`). Spawn the workers the skill names.
-- Launch independent workers together in the background (`background: true` on OpenCode's `subagent` tool) so they run in parallel, then collect every report before acting on them.
+- Launch independent workers in one turn so they run in parallel. When you wait on all of them, leave OpenCode's `background` off so they return together; use `background: true` only when you have other work to do meanwhile. Collect every report before acting on them.
 - Per-role subagent models in `.opencode/pstack-models.md` are the user's explicit choices. Pass the role's value exactly as written.
 
 ## Commits

@@ -10,7 +10,7 @@ These mappings target OpenCode V2 (verified on 2.2.7). V1 names such as the `tas
 | --- | --- |
 | `Task` (spawn a subagent) | `subagent` tool with `agent` (the agent ID), `description` (3-5 words), and `prompt`. Optional: `model`, `background`, `sessionID`. See Subagent fields |
 | `AskQuestion` | `question` tool. If the session has no `question` tool, ask in plain text. Subagents built on `general` cannot ask |
-| Open a todolist | `todowrite` (enabled by `experimental.todo` in `.opencode/opencode.json`). Without it, keep the list in your reply and update it at each phase |
+| Open a todolist | `todowrite` (enabled by `experimental.todo` in `.opencode/opencode.json`). Superpowers' startup text says OpenCode v2 has no todo tool; that is outdated here, so use `todowrite`. Without it, keep the list in your reply and update it at each phase |
 | Run another pstack skill (`/name` or "the **name** skill") | `skill` tool with `id: "<name>"`. Most pstack skills set `disable-model-invocation: true`, so they are missing from the advertised skill list, but the tool still loads them by ID. If a call is refused, read `.opencode/skills/<name>/SKILL.md` instead. When you tell the user to type it, write `/<name>` (slash commands exist for every non-`principle-*` skill) |
 | `Grep`, `Glob`, `Read` | `grep`, `glob`, `read` |
 | `Shell`, `Bash` | `shell` |
@@ -32,7 +32,7 @@ These mappings target OpenCode V2 (verified on 2.2.7). V1 names such as the `tas
 
 Subagents cannot spawn subagents: nesting depth is 1 (`experimental.subagent_depth`), and `general` denies the `subagent` tool. A skill step that has a worker fan out again runs that fan-out from the parent session.
 
-Parallel fan-out needs `background: true`. A foreground `subagent` call blocks until its child finishes, so N foreground workers run one after another. For any fan-out (swarm, arena, interrogate, architect, how, why, reflect), send every worker's `subagent` call in the same turn with `background: true`, then wait for the completion notices. Do not sleep or poll. Only an agent whose mode is `subagent` or `all` can be spawned. A `primary` agent fails with "cannot run as a subagent".
+Parallel fan-out means every worker's `subagent` call in the same turn: calls in one turn run concurrently (verified on 2.2.7: three 15-second foreground workers started and finished together). When you wait on all of them, as in swarm, arena, interrogate, architect, how, why, and reflect, leave `background` off: the turn returns once with every report. Use `background: true` only when you have other work to do meanwhile; then each child sends a completion notice and wakes you. Do not sleep or poll. Foreground calls in separate turns run one after another. Only an agent whose mode is `subagent` or `all` can be spawned. A `primary` agent fails with "cannot run as a subagent".
 
 ## Models
 
