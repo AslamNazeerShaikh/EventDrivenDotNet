@@ -801,6 +801,8 @@ MediatR is worth it when an app has dozens of handlers and you rely on its pipel
 
 Build in six phases, each ending in something you can run and check. The data plane comes before the control plane, so there is a working pipeline to control.
 
+**Process: SDD then TDD.** Each phase starts with Spec-Driven Development: write the spec first (analysis, research, pitfalls, pros/cons, advantages/disadvantages), review it, and only then build. Every implementation step follows Test-Driven Development: red-green-refactor, test first, no production code without a failing test. The repo's vendored skills back both halves (planning and test skills under `.opencode/skills/`).
+
 | Phase | Build | Done when |
 | --- | --- | --- |
 | 0. Skeleton | Solution, `Directory.Build.props`, `Edd.Contracts` with the union and closed types, Dockerfile with Kafka + `topic-init` only | `docker run` starts Kafka; `kafka-topics.sh --list` shows all five topics; the union JSON-shape test passes |
@@ -810,7 +812,7 @@ Build in six phases, each ending in something you can run and check. The data pl
 | 4. Dashboard | React panels and controls behind nginx | Every number on screen traces to one API endpoint; controls work without a page reload |
 | 5. Hardening and rehearsal | Healthchecks, README, DLQ path, Playwright E2E (start, rate change, stop, reconciliation proof against the running container), the failure drills in section 13 | The full demo script runs end to end twice from a cold `docker run` |
 
-Tests that pay for themselves: the union JSON shape, the gap query against a seeded SQLite file, the rate-per-tick maths (including remainders), the health thresholds, and the replay rules (no restart of an idle or finished producer).
+Tests that pay for themselves, all written test-first (red-green-refactor): the union JSON shape, the gap query against a seeded SQLite file, the rate-per-tick maths (including remainders), the health thresholds, and the replay rules (no restart of an idle or finished producer).
 
 ---
 
