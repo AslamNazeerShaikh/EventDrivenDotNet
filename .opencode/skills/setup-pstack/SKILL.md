@@ -60,7 +60,10 @@ arena cross-judge pool: inherit-parent, inherit-parent
 swarm workers: inherit-parent
 architect runners: inherit-parent, inherit-parent
 interrogate reviewers: inherit-parent, inherit-parent
+chores: inherit-parent
 ```
+
+`chores` is a local role: the model for the one `general` subagent that `/poteto-mode` hands a chore to (servers, kills, builds, git sync, formatting, package upgrades, PR or CI status).
 
 ### 6. Confirm
 
