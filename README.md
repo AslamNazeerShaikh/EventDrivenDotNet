@@ -5,7 +5,9 @@ Append-only event log, idempotent consumers with DLQ isolation, and end-to-end t
 
 ![Architecture: browser, edge proxy, command API, producers, Kafka broker, consumers and SQLite sinks in one container](docs/diagrams/architecture.svg)
 
-Dark showcase version with full detail (ports, topics, proof, operations): [`docs/diagrams/architecture-dark.html`](docs/diagrams/architecture-dark.html).
+Dark showcase version with full detail (ports, topics, proof, operations) — click to open the interactive file:
+
+[![Dark architecture diagram: producers, Kafka topics, consumers, SQLite sinks and delivery proof in one container](docs/diagrams/architecture-dark.png)](docs/diagrams/architecture-dark.html)
 
 Full game plan (decisions, contracts, diagrams, build phases, demo script): [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md).
 
