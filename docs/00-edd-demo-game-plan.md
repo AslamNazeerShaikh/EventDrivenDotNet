@@ -142,6 +142,7 @@ Use Apache Kafka 4.4 in single-node KRaft mode as the only channel between servi
 | Real-time to the UI | REST polling at 1 s; SSE endpoint as an upgrade | Meets "REST only" literally; SSE is still plain HTTP |
 | Process manager | `supervisord` | Start order, restarts, unified logs, and `supervisorctl stop` for failure drills |
 | Delivery semantics | Idempotent producer (`acks=all`); consumer commits offsets after the DB commit; `INSERT OR IGNORE` on `event_id` | At-least-once delivery plus an idempotent sink = effectively-once rows |
+| Tests | xUnit.net v3 (`xunit.v3` 4.0.3) for unit and integration; Playwright for .NET (`Microsoft.Playwright` 1.64.1) on the xUnit runner for end-to-end | Matches the repo's test skills; one runner everywhere |
 
 ### Rejected, with the one-line reason you'll give if asked
 
@@ -681,7 +682,9 @@ edd-demo/
 │  ├─ Edd.Api/                  # minimal API + hosted services
 │  ├─ Edd.Producer/             # worker + Kestrel /healthz, /metrics
 │  └─ Edd.Consumer/             # worker + Kestrel /healthz, /metrics
-├─ tests/Edd.Tests/             # union JSON shape, gap query, rate maths
+├─ tests/
+│  ├─ Edd.Tests/              # xUnit.net v3: union JSON shape, gap query, rate maths
+│  └─ Edd.E2E/                # xUnit.net v3 + Playwright for .NET: full-container flows
 ├─ web/                         # React + Vite + TypeScript
 └─ deploy/                      # supervisord.conf, nginx.conf, kafka.properties, scripts/
 ```
@@ -805,7 +808,7 @@ Build in six phases, each ending in something you can run and check. The data pl
 | 2. Control plane | `control.commands` listener, acks, generator start/stop/rate; API command endpoints | `curl` start, change rate, stop; each returns a `commandId` that turns "acknowledged" within a second or two |
 | 3. Telemetry and proof | Heartbeats, HealthEvaluator, BrokerProbe, `/api/reconciliation` | After a stop and drain: acked = on bus = committed = persisted; stopping a consumer marks it `Down` within 10 s |
 | 4. Dashboard | React panels and controls behind nginx | Every number on screen traces to one API endpoint; controls work without a page reload |
-| 5. Hardening and rehearsal | Healthchecks, README, DLQ path, the failure drills in section 13 | The full demo script runs end to end twice from a cold `docker run` |
+| 5. Hardening and rehearsal | Healthchecks, README, DLQ path, Playwright E2E (start, rate change, stop, reconciliation proof against the running container), the failure drills in section 13 | The full demo script runs end to end twice from a cold `docker run` |
 
 Tests that pay for themselves: the union JSON shape, the gap query against a seeded SQLite file, the rate-per-tick maths (including remainders), the health thresholds, and the replay rules (no restart of an idle or finished producer).
 
@@ -876,3 +879,6 @@ Most risk sits in startup ordering, SQLite file handling, command replay and bra
 - [Server-Sent Events in ASP.NET Core](https://se-dotnet-ecosystem.pages.dev/articles/aspnet/server-sent-events-in-aspnetcore-and-dotnet-10/)
 - [MediatR vs plain service classes in 2026](https://startdebugging.net/2026/05/mediatr-vs-plain-service-classes-in-2026/)
 - [MediatR and MassTransit going commercial](https://milanjovanovic.tech/blog/mediatr-and-masstransit-going-commercial-what-this-means-for-you), Milan Jovanović
+- [xUnit.net](https://xunit.net/index.html?tabs=cs), test framework
+- [xUnit.net v3 API docs (4.0.3)](https://api.xunit.net/v3/4.0.3/)
+- [Playwright for .NET](https://playwright.dev/dotnet/docs/intro), end-to-end tests
