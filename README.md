@@ -1,6 +1,7 @@
 # EventDrivenDotNet
 
-Interview demo: two producers, two consumers, one command API and one React dashboard. Kafka is the only channel between services, SQLite files are the sinks, and everything runs in a single Docker container.
+Production-style event-driven reference in .NET 11 and Kafka 4.4 (KRaft): two producers publish domain events, two consumers sink them into SQLite (WAL), with a command API, delivery-proof endpoint, and React dashboard — all in one Docker image.
+Append-only event log, idempotent consumers with DLQ isolation, and end-to-end tests (xUnit.net v3 + Playwright) demonstrating exactly-once-effect semantics.
 
 ![Architecture: browser, edge proxy, command API, producers, Kafka broker, consumers and SQLite sinks in one container](docs/diagrams/architecture.svg)
 
