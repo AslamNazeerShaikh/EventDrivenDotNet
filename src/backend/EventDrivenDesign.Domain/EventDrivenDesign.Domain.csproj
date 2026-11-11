@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.Domain</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+  </ItemGroup>
+</Project>

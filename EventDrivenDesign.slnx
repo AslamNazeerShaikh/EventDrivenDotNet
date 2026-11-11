@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="src/backend/EventDrivenDesign.Shared/EventDrivenDesign.Shared.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Contracts/EventDrivenDesign.Contracts.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Messaging/EventDrivenDesign.Messaging.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Domain/EventDrivenDesign.Domain.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Application/EventDrivenDesign.Application.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Persistence/EventDrivenDesign.Persistence.csproj" />
+  <Project Path="src/backend/EventDrivenDesign.Infrastructure/EventDrivenDesign.Infrastructure.csproj" />
+  <Project Path="tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj" />
+</Solution>

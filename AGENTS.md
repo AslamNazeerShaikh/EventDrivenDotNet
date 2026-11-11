@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Include tables in responses
+
+- When a reply carries comparable numbers, options, or findings a reader would line up by hand, use one or more detailed tables with multiple columns when the table fits.
+- Number every row with an index column so each item stays referenceable in the surrounding prose.
+- When the content is a single fact, a narrative, or a judgment with no peers, keep prose. Never force content into a table to decorate it.
+- Note this only adds or guides how to include tables in responses and it does not change any skill's or agent's own response format. Means I need skill's or agent's original response plus this "add tables instruction" in responses/outputs but smartly and not in every time.
+
 ## Commits
 
 Follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).

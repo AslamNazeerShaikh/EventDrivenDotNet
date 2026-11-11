@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="EventDrivenDesign.Shared/EventDrivenDesign.Shared.csproj" />
+  <Project Path="EventDrivenDesign.Contracts/EventDrivenDesign.Contracts.csproj" />
+  <Project Path="EventDrivenDesign.Messaging/EventDrivenDesign.Messaging.csproj" />
+  <Project Path="EventDrivenDesign.Domain/EventDrivenDesign.Domain.csproj" />
+  <Project Path="EventDrivenDesign.Application/EventDrivenDesign.Application.csproj" />
+  <Project Path="EventDrivenDesign.Persistence/EventDrivenDesign.Persistence.csproj" />
+  <Project Path="EventDrivenDesign.Infrastructure/EventDrivenDesign.Infrastructure.csproj" />
+</Solution>
