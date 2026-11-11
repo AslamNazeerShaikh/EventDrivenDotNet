@@ -1,6 +1,6 @@
 # Event-Driven Architecture Demo: Game Plan (.NET 11 / C# 15)
 
-> Prepared for Tayyab · As of 11 November 2026
+> Prepared by Tayyab Nazeer Shaikh at https://github.com/TayyabNazeerShaikh · As of 11 November 2026
 >
 > Interview demo: two producers, two consumers, one command API and one React dashboard. Kafka is the only channel between services, SQLite files are the sinks, and everything runs in a single Docker container.
 
