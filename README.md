@@ -76,6 +76,12 @@ flowchart LR
     class PA,PB,CA,CB svc
     class DBA,DBB db
     class PRF prf
+    style Docker fill:transparent
+    style Edge fill:transparent
+    style Prod fill:transparent
+    style Kafka fill:transparent
+    style Cons fill:transparent
+    style Store fill:transparent
 ```
 
 Full game plan (decisions, contracts, diagrams, build phases, demo script): [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md).
