@@ -3,20 +3,5 @@
   "plugins": [
     "superpowers@git+https://github.com/obra/superpowers.git#v7.0.2",
     "@dietrichgebert/ponytail@5.3.3"
-  ],
-  "skills": [
-    "~/.config/opencode/dotnet-skills/plugins/dotnet/skills",
-    "~/.config/opencode/dotnet-skills/plugins/dotnet11/skills",
-    "~/.config/opencode/dotnet-skills/plugins/dotnet-aspnetcore/skills",
-    "~/.config/opencode/dotnet-skills/plugins/dotnet-test/skills",
-    "~/.config/opencode/dotnet-skills/plugins/dotnet-msbuild/skills"
-  ],
-  "mcp": {
-    "servers": {
-      "binlog": {
-        "type": "local",
-        "command": ["dotnet", "dnx", "Microsoft.AITools.BinlogMcp", "--yes", "--prerelease"]
-      }
-    }
-  }
+  ]
 }
