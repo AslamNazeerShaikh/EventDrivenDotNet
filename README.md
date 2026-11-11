@@ -5,6 +5,7 @@ Append-only event log, idempotent consumers with DLQ isolation, and end-to-end t
 
 ```mermaid
 flowchart LR
+    subgraph Whole["system boundary · everything inside one container · Browser is the only external"]
     Browser(["Browser<br/>React SPA · EXTERNAL"]) -->|HTTP :3000| Nginx
     subgraph Docker["docker · edd-demo · one image · supervisord PID 1"]
         direction LR
@@ -58,6 +59,7 @@ flowchart LR
     SUP -.->|manages| LOG
     API -.->|proves| PRF
     Nginx ~~~ PA ~~~ TCMD ~~~ CA ~~~ DBA
+    end
     classDef ext fill:#0f172a,stroke:#94a3b8,color:#e2e8f0
     classDef edge fill:#082f3f,stroke:#22d3ee,color:#fff
     classDef api fill:#06302a,stroke:#34d399,color:#fff
@@ -82,6 +84,7 @@ flowchart LR
     style Kafka fill:transparent
     style Cons fill:transparent
     style Store fill:transparent
+    style Whole fill:transparent,stroke:#94a3b8,stroke-width:2px
 ```
 
 Full game plan (decisions, contracts, diagrams, build phases, demo script): [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md).
