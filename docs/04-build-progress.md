@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 12 November 2026, Task 7 done; Task 7b in progress.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 12 November 2026, Task 7b in fix round 1.
 
 ## 1. Where things are
 
@@ -35,7 +35,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 6 | Kafka settings, CloudEvents, backoff | Done | `7102f51` | Clean |
 | 5 | Collector (+ simulator re-inject fix) | Done | `de16055`, `f0fe090` | Clean |
 | 7 | Sender, with a Kafka Testcontainers test | Done | `272ae74`, `ba00a3b` | Clean after 1 fix round |
-| 7b | Shared (Result) + Infrastructure (global exception handling) | **In progress** | — | — |
+| 7b | Shared (Result) + Infrastructure (global exception handling) | **Fix round 1 running** | `5a2ef94` | Needs fixes: `Result<T>.ToString()` throws on failure; handler's 400 branch untested |
 | 8 | Gateway host, image, 5 gateways | To do | — | — |
 | 9 | Central store (PostgreSQL) | To do | — | — |
 | 10 | Consumer host, drain cap | To do | — | — |
@@ -101,7 +101,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 7b is being built from `task-7b-brief.md` (base: the commit before it). If its result is lost, check `git log` for `feat(infrastructure): add Result pattern and global exception handling`. If it exists, review it against the brief; otherwise re-dispatch the brief.
+3. **Right now:** Task 7b (`5a2ef94`) is in fix round 1: safe `Result` `ToString`, plus a test that reaches the handler's malformed-request branch. If the result is lost, look for a commit after `5a2ef94` touching `Result.cs` and the tests. If it exists, re-review `5a2ef94..HEAD` against the two findings in the ledger; otherwise re-dispatch them. Then go on to Task 8.
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
