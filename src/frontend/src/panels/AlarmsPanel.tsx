@@ -26,7 +26,7 @@ export function AlarmsPanel({ alarms, paused, note }: { alarms: AlarmView[] | un
     <Panel title="Alarms" note={note}>
       <div className="max-h-44 overflow-auto">
         {!alarms ? (
-          <p className="text-muted">Waiting for the API…</p>
+          <p className="text-muted">Waiting for data…</p>
         ) : alarms.length === 0 ? (
           <p className="text-muted">No alarms at central yet.</p>
         ) : (

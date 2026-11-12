@@ -13,7 +13,7 @@ export function ReadingsChart({ chart, nowMs, note }: { chart: Chart | undefined
   return (
     <Panel title="Readings by device time, 10 min (UTC)" note={note}>
       {!chart ? (
-        <p className="text-muted">Waiting for the API…</p>
+        <p className="text-muted">Waiting for data…</p>
       ) : (
         <>
           <div className="h-56" role="img" aria-label="Bar chart of readings per 5 seconds over the last 10 minutes; gaps are zero">

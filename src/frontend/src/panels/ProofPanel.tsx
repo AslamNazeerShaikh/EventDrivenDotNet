@@ -18,7 +18,7 @@ interface FullCheck {
 
 export function ProofPanel({ proof, full, nowMs, note }: { proof: Reconciliation | undefined; full: FullCheck; nowMs: number; note?: string | undefined }) {
   const [open, setOpen] = useState(false);
-  if (!proof) return <Panel title="Proof" note={note}><p className="text-muted">Waiting for the API…</p></Panel>;
+  if (!proof) return <Panel title="Proof" note={note}><p className="text-muted">Waiting for data…</p></Panel>;
   const { verdict, duplicateRows, checkedAgoSeconds } = proofView(proof, full.result, nowMs);
   const v = VERDICT[verdict] ?? UNKNOWN;
   const machines = [...proof.machines].sort((a, b) => b.missing + b.gaps - (a.missing + a.gaps) || a.machineId.localeCompare(b.machineId));

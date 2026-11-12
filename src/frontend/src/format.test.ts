@@ -1,6 +1,6 @@
 import type { Reconciliation } from "./api";
 import { describe, expect, test } from "bun:test";
-import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, proofView, shouldRequestFull } from "./format";
+import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, panelNote, proofView, shouldRequestFull } from "./format";
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
 
@@ -118,4 +118,16 @@ describe("proofView", () => {
     expect(proofView(rec({}), undefined, NOW)).toEqual({ verdict: "PASS", duplicateRows: null, checkedAgoSeconds: null }));
   test("a live FAIL is not hidden by an older full PASS", () =>
     expect(proofView(rec({ verdict: "FAIL" }), full({ verdict: "PASS" }), NOW).verdict).toBe("FAIL"));
+});
+
+describe("panelNote", () => {
+  test("no error, no note", () => expect(panelNote(false, true, "x")).toBeUndefined());
+  test("error with data keeps the last-data note", () =>
+    expect(panelNote(true, true, "x")).toBe("Not updating, showing the last data received."));
+  test("error before any data names the reason", () =>
+    expect(panelNote(true, false, "The central database did not answer.")).toBe(
+      "No data yet. The central database did not answer. Retrying every second.",
+    ));
+  test("error before any data, no reason", () =>
+    expect(panelNote(true, false, undefined)).toBe("No data yet. The API did not answer. Retrying every second."));
 });

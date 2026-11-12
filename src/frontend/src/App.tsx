@@ -1,15 +1,15 @@
-import { useAlarms, useChart, useFullCheck, useOverview, useReconciliation } from "./api";
+import { ApiError, useAlarms, useChart, useFullCheck, useOverview, useReconciliation } from "./api";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { useNow } from "./useNow";
-import { agoText } from "./format";
+import { agoText, panelNote } from "./format";
 import { AlarmsPanel } from "./panels/AlarmsPanel";
 import { BuffersLag } from "./panels/BuffersLag";
 import { PipelineStrip } from "./panels/PipelineStrip";
 import { ProofPanel } from "./panels/ProofPanel";
 import { ReadingsChart } from "./panels/ReadingsChart";
 
-// A panel keeps its last data when its query fails; this says so.
-const stale = (q: { isError: boolean }) => (q.isError ? "Not updating, showing the last data received." : undefined);
+const note = (q: { isError: boolean; data: unknown; error: unknown }) =>
+  panelNote(q.isError, q.data !== undefined, q.error instanceof ApiError ? q.error.message : undefined);
 
 export default function App() {
   const overview = useOverview();
@@ -44,13 +44,13 @@ export default function App() {
           <BuffersLag overview={overview.data} />
         </ErrorBoundary>
         <ErrorBoundary label="Chart" resetKey={chart.dataUpdatedAt}>
-          <ReadingsChart chart={chart.data} nowMs={nowMs} note={stale(chart)} />
+          <ReadingsChart chart={chart.data} nowMs={nowMs} note={note(chart)} />
         </ErrorBoundary>
         <ErrorBoundary label="Proof" resetKey={proof.dataUpdatedAt}>
-          <ProofPanel proof={proof.data} full={full} nowMs={clock} note={stale(proof)} />
+          <ProofPanel proof={proof.data} full={full} nowMs={clock} note={note(proof)} />
         </ErrorBoundary>
         <ErrorBoundary label="Alarms" resetKey={alarms.dataUpdatedAt}>
-          <AlarmsPanel alarms={alarms.data} paused={paused} note={stale(alarms)} />
+          <AlarmsPanel alarms={alarms.data} paused={paused} note={note(alarms)} />
         </ErrorBoundary>
       </div>
     </main>
