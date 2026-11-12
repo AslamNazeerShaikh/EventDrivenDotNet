@@ -223,6 +223,20 @@ services:
     restart: on-failure
     networks: [plant, central, ops]
 
+  dashboard:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: dashboard
+    ports: ["3000:80"]
+    depends_on:
+      api:
+        condition: service_started
+    mem_limit: 64m
+    memswap_limit: 64m
+    restart: on-failure
+    networks: [ops]
+
 networks:
   plant:
   central:

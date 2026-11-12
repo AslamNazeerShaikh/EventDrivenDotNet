@@ -1,0 +1,57 @@
+import type { ChartPoint, ServiceHealth } from "./api";
+
+const BUCKET_MS = 5000;
+// The API reports a source it has never seen as the Unix epoch; anything before 2000 means "never".
+const NEVER_BEFORE_MS = Date.UTC(2000, 0, 1);
+
+export function agoText(iso: string, nowMs: number): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t) || t < NEVER_BEFORE_MS) return "never";
+  const s = Math.max(0, Math.round((nowMs - t) / 1000));
+  if (s < 60) return `${s} s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  return `${Math.floor(s / 3600)} h ago`;
+}
+
+export function healthLabel(h: ServiceHealth, nowMs: number): string {
+  switch (h.$type) {
+    case "Healthy":
+      return "Healthy";
+    case "Degraded":
+      return `Degraded: ${h.reason}`;
+    case "Down": {
+      const ago = agoText(h.lastSeen, nowMs);
+      return ago === "never" ? "Down, never seen" : `Down, last seen ${ago}`;
+    }
+  }
+}
+
+// A Down tile still carries its last rates; they are history, not live.
+export const isStale = (h: ServiceHealth): boolean => h.$type === "Down";
+
+export const formatSeconds = (s: number | null): string => (s === null ? "—" : `${Math.max(0, s).toFixed(1)} s`);
+
+export function formatEta(s: number | null): string {
+  if (s === null) return "—";
+  const total = Math.max(0, Math.round(s));
+  if (total < 60) return `${total} s`;
+  return `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, "0")} s`;
+}
+
+export const formatInt = (n: number): string => Math.round(n).toLocaleString("en-US");
+
+// The API returns only buckets that have readings. Fill the whole window with zeros so an outage shows as a hole.
+export function fillBuckets(points: readonly ChartPoint[], nowMs: number, minutes: number, watermark: string | null): ChartPoint[] {
+  const known = new Map(points.map((p) => [Date.parse(p.bucketStart), p]));
+  const wm = watermark === null ? null : Date.parse(watermark);
+  const last = Math.floor(nowMs / BUCKET_MS) * BUCKET_MS;
+  const out: ChartPoint[] = [];
+  for (let t = last - minutes * 60_000; t <= last; t += BUCKET_MS) {
+    out.push({
+      bucketStart: new Date(t).toISOString(),
+      readings: known.get(t)?.readings ?? 0,
+      provisional: known.get(t)?.provisional ?? (wm === null || t > wm),
+    });
+  }
+  return out;
+}
