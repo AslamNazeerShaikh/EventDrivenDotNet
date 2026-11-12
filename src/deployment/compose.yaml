@@ -1,5 +1,24 @@
 name: edd
 
+x-gateway: &gateway
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: gateway
+  environment: &gateway-env
+    Gateway__Plant: P1
+    Gateway__FaultsPerMinute: "0.5"
+    Kafka__BootstrapServers: plant-kafka:9092
+    Buffer__Path: /data/buffer.db
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    plant-topics:
+      condition: service_completed_successfully
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  networks: [plant]
+
 services:
   plant-kafka:
     image: apache/kafka:4.4.0
@@ -77,6 +96,58 @@ services:
       interval: 5s
       retries: 30
 
+  plant-topics:
+    image: apache/kafka:4.4.0
+    entrypoint: ["/bin/sh", "/create-topics.sh"]
+    volumes: [./kafka/create-topics.sh:/create-topics.sh:ro]
+    depends_on:
+      plant-kafka:
+        condition: service_healthy
+    mem_limit: 512m
+    memswap_limit: 512m
+    restart: "no"
+    networks: [plant]
+
+  gateway-prs:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PRS
+      Gateway__Seed: "1000"
+    volumes: [gateway-prs-data:/data]
+
+  gateway-bdy:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: BDY
+      Gateway__Seed: "2000"
+    volumes: [gateway-bdy-data:/data]
+
+  gateway-pnt:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PNT
+      Gateway__Seed: "3000"
+    volumes: [gateway-pnt-data:/data]
+
+  gateway-mch:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: MCH
+      Gateway__Seed: "4000"
+    volumes: [gateway-mch-data:/data]
+
+  gateway-asm:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: ASM
+      Gateway__Seed: "5000"
+    volumes: [gateway-asm-data:/data]
+
 networks:
   plant:
   central:
@@ -86,3 +157,8 @@ volumes:
   plant-kafka-data:
   central-kafka-data:
   central-db-data:
+  gateway-prs-data:
+  gateway-bdy-data:
+  gateway-pnt-data:
+  gateway-mch-data:
+  gateway-asm-data:
