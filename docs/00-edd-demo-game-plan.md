@@ -413,7 +413,7 @@ SELECT count(*) FROM ins;   -- inserted; batch size − inserted = duplicates ab
 
 A machine's key always maps to one partition, so only one consumer updates a given `machine_progress` row at a time. During a rebalance the row lock serialises any overlap.
 
-Schema (`src/deploy/postgres/01-schema.sql`, mounted into `/docker-entrypoint-initdb.d/`; the integration tests run the same file):
+Schema (`src/deployment/postgres/01-schema.sql`, mounted into `/docker-entrypoint-initdb.d/`; the integration tests run the same file):
 
 ```sql
 CREATE TABLE readings (
@@ -548,7 +548,7 @@ Colour is never the only signal: each health state has a text label too. The lay
 
 ## 10. Failure drills
 
-`scripts/drill.sh` wraps Docker commands so the panel sees exactly what is being broken. The Compose project name is `edd`.
+`src/deployment/scripts/drill.sh` wraps Docker commands so the panel sees exactly what is being broken. The Compose project name is `edd`.
 
 | # | Command | Runs | Expected |
 | --- | --- | --- | --- |
@@ -568,47 +568,61 @@ Every feature is built test-first (red, green, refactor), and no production code
 
 | # | Level | Project and tools | Needs | Covers |
 | --- | --- | --- | --- | --- |
-| 1 | Unit | `src/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
-| 2 | Integration | `src/tests/EventDrivenDesign.IntegrationTests`: xUnit.net v3 + Testcontainers (`apache/kafka:4.4.0`, `postgres:18.6-alpine`) | Docker | The sender against a broker that is paused and resumed: rows stay, then drain, with exact counts. A consumer fed every record twice: one row each and duplicates absorbed = N. A consumer killed before storing offsets: the redelivery is absorbed. A gateway → Kafka → consumer → PostgreSQL pipeline with a broker outage in the middle: generated = stored, 0 gaps |
-| 3 | End-to-end | `src/tests/EventDrivenDesign.E2ETests`: xUnit.net v3 + Microsoft.Playwright against `docker compose up` | The full stack | The dashboard turns healthy; a 30-second `central-down` drill followed by the proof shows PASS; an injected alarm appears at central |
+| 1 | Unit | `src/backend/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
+| 2 | Integration | `src/backend/tests/EventDrivenDesign.IntegrationTests`: xUnit.net v3 + Testcontainers (`apache/kafka:4.4.0`, `postgres:18.6-alpine`) | Docker | The sender against a broker that is paused and resumed: rows stay, then drain, with exact counts. A consumer fed every record twice: one row each and duplicates absorbed = N. A consumer killed before storing offsets: the redelivery is absorbed. A gateway → Kafka → consumer → PostgreSQL pipeline with a broker outage in the middle: generated = stored, 0 gaps |
+| 3 | End-to-end | `src/backend/tests/EventDrivenDesign.E2ETests`: xUnit.net v3 + Microsoft.Playwright against `docker compose up` | The full stack | The dashboard turns healthy; a 30-second `central-down` drill followed by the proof shows PASS; an injected alarm appears at central |
 
-Commands (run from `src/`, where `global.json` pins the SDK): `dotnet test --project tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj` runs the fast suite. The integration and end-to-end projects are run explicitly. The frontend's type check (`bunx tsc -b`) runs in its build.
+Commands (run from `src/backend/`, where `global.json` pins the SDK): `dotnet test --project tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj` runs the fast suite. The integration and end-to-end projects are run explicitly. The frontend's type check (`bunx tsc -b`) runs in its build.
 
 ---
 
 ## 12. Solution layout
 
+### Strict placement rules
+
+Nothing project-related lives at the repo root or directly under `src/`. The root holds only `README.md`, `LICENSE.md`, `.gitignore`, `AGENTS.md`, `docs/` and `src/`. Every file has exactly one home:
+
+| # | Anything related to | Lives only in | Never anywhere else |
+| --- | --- | --- | --- |
+| 1 | .NET: solutions, projects, `Directory.*.props`, `global.json`, backend tests and their `TestResults` | `src/backend/` | No `.csproj`, `.slnx`, props file, or backend test output outside it |
+| 2 | Web: app code, `package.json`, `bun.lock`, frontend tests and coverage | `src/frontend/` | No frontend file outside it |
+| 3 | Runtime: `Dockerfile`, `compose.yaml`, Kafka, PostgreSQL and nginx configs, drill scripts | `src/deployment/` | No CI/CD, Docker, or environment config outside it |
+
+`src/deployment/` replaces the old `deploy/` name. Backend tests live in `src/backend/tests/`, not `src/tests/`. A file found outside its home is moved in the same commit, no exceptions.
+
 ```text
 EventDrivenArchitecture/
-├─ compose.yaml                        # future: references src/Dockerfile
-├─ scripts/drill.sh                    # future
-├─ src/
-│  ├─ EventDrivenDesign.slnx
-│  ├─ Dockerfile                       # targets: gateway, consumer, api, dashboard; context is src/
-│  ├─ Directory.Build.props
-│  ├─ Directory.Packages.props
-│  ├─ global.json                      # run dotnet commands from src/
-│  ├─ deploy/
-│  │  ├─ kafka/create-topics.sh        # run by plant-topics
-│  │  ├─ kafka/mm2.properties
-│  │  ├─ postgres/01-schema.sql
-│  │  └─ nginx/default.conf
-│  ├─ backend/
-│  │  ├─ EventDrivenDesign.Contracts/  # wire records, GatewayCommand, metrics DTOs, TopicNames, JSON context
-│  │  ├─ EventDrivenDesign.Domain/     # machine catalogue, signal model, simulator, reconciliation maths (pure)
-│  │  ├─ EventDrivenDesign.Messaging/  # Kafka config builders, CloudEvents headers
-│  │  ├─ EventDrivenDesign.Persistence/# SQLite buffer (gateway) and PostgreSQL store and queries
-│  │  ├─ EventDrivenDesign.Infrastructure/# ResourceSampler, metrics endpoint helpers
-│  │  ├─ EventDrivenDesign.Shared/     # Result, Guard, ExceptionMiddleware
-│  │  ├─ EventDrivenDesign.Gateway/    # host
-│  │  ├─ EventDrivenDesign.Consumer/   # host
-│  │  ├─ EventDrivenDesign.Api/        # host
-│  │  └─ EventDrivenDesign.{Gateway,Consumer,Api}.slnx
-│  ├─ frontend/                        # React + Vite + TypeScript + Tailwind, Bun
-│  └─ tests/
-│     ├─ EventDrivenDesign.Tests/
-│     ├─ EventDrivenDesign.IntegrationTests/
-│     └─ EventDrivenDesign.E2ETests/
+├─ README.md, LICENSE.md, .gitignore, AGENTS.md
+├─ docs/
+└─ src/
+   ├─ backend/                         # everything dotnet; run dotnet commands from here
+   │  ├─ EventDrivenDesign.slnx
+   │  ├─ Directory.Build.props
+   │  ├─ Directory.Packages.props
+   │  ├─ global.json
+   │  ├─ EventDrivenDesign.Contracts/  # wire records, GatewayCommand, metrics DTOs, TopicNames, JSON context
+   │  ├─ EventDrivenDesign.Domain/     # machine catalogue, signal model, simulator, reconciliation maths (pure)
+   │  ├─ EventDrivenDesign.Messaging/  # Kafka config builders, CloudEvents headers
+   │  ├─ EventDrivenDesign.Persistence/ # SQLite buffer (gateway) and PostgreSQL store and queries
+   │  ├─ EventDrivenDesign.Infrastructure/# ResourceSampler, metrics endpoint helpers
+   │  ├─ EventDrivenDesign.Shared/     # Result, Guard, ExceptionMiddleware
+   │  ├─ EventDrivenDesign.Gateway/    # host
+   │  ├─ EventDrivenDesign.Consumer/    # host
+   │  ├─ EventDrivenDesign.Api/        # host
+   │  ├─ EventDrivenDesign.{Gateway,Consumer,Api}.slnx
+   │  └─ tests/
+   │     ├─ EventDrivenDesign.Tests/
+   │     ├─ EventDrivenDesign.IntegrationTests/
+   │     └─ EventDrivenDesign.E2ETests/
+   ├─ frontend/                        # everything web: React + Vite + TypeScript + Tailwind, Bun
+   └─ deployment/                      # everything runtime; docker context is src/
+      ├─ Dockerfile                    # targets: gateway, consumer, api, dashboard
+      ├─ compose.yaml
+      ├─ kafka/create-topics.sh        # run by plant-topics
+      ├─ kafka/mm2.properties
+      ├─ postgres/01-schema.sql
+      ├─ nginx/default.conf
+      └─ scripts/drill.sh
 ```
 
 These go, because the plant design replaces them:
@@ -619,10 +633,10 @@ These go, because the plant design replaces them:
 | 2 | `ProducerCommand` (`Start`, `Stop`, `SetRate`), `CommandAck`, `Heartbeat` | `GatewayCommand`, `GatewayMetrics`, `ConsumerMetrics` |
 | 3 | `TopicNames` values (`demo.events`, `control.*`, `telemetry.heartbeats`) | The four topics in section 4 |
 | 4 | `RateMath` | Nothing: one reading per machine per second needs no rate splitting |
-| 5 | `SinkSchema` (SQLite sink) and `OutboxSchema` | `src/deploy/postgres/01-schema.sql` and the gateway buffer schema |
+| 5 | `SinkSchema` (SQLite sink) and `OutboxSchema` | `src/deployment/postgres/01-schema.sql` and the gateway buffer schema |
 | 6 | `Envelope` `x-run-id`, `x-stream-id` and `x-seq` headers | CloudEvents headers (section 4) |
 | 7 | `EventDrivenDesign.Producer.slnx` | `EventDrivenDesign.Gateway.slnx` |
-| 8 | `deploy/supervisord.conf`, `deploy/kafka.properties`, `deploy/scripts/*`, `deploy/nginx.conf`, the single-image `Dockerfile` | `compose.yaml`, the multi-target `src/Dockerfile` and `src/deploy/*` above |
+| 8 | `deploy/supervisord.conf`, `deploy/kafka.properties`, `deploy/scripts/*`, `deploy/nginx.conf`, the single-image `Dockerfile` | `src/deployment/compose.yaml`, the multi-target `src/deployment/Dockerfile` and `src/deployment/*` above |
 | 9 | `docs/diagrams/architecture*` (the single-container diagram) | `docs/diagrams/01–08` |
 | 10 | `IMessageHandler` (Application), if nothing implements it after F6 | The exhaustive switch over `GatewayCommand` |
 
