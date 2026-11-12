@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="EventDrivenDesign.Contracts/EventDrivenDesign.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj" />
+  </Folder>
+</Solution>
