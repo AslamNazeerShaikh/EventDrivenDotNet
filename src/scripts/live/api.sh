@@ -21,7 +21,7 @@
 #   src/scripts/live/api.sh watch-proof 60      # the verdict must stay PASS while settled
 set -euo pipefail
 
-[[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]] && { sed -n '2,24p' "$0"; exit 0; }
+[[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]] && { sed -n '2,21p' "$0"; exit 0; }
 BASE="${API_BASE:-http://localhost:3000}"
 get()  { curl -fsS --max-time 10 "$BASE$1"; }
 post() { curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' --data "${2:-}" "$BASE$1" -o /dev/null -w '%{http_code}\n'; }
@@ -32,20 +32,32 @@ d = json.load(sys.stdin)
 keys = ["verdict","paused","drained","generated","stored","missing","gaps","duplicateRows","duplicatesAbsorbed"]
 print("  ".join(f"{k}={d.get(k)}" for k in keys))'
 
-overview_py='
+# Quoted heredocs keep the Python free of shell escaping (escaped quotes inside
+# f-string fields are a SyntaxError).
+read -r -d '' overview_py <<'PY' || true
 import json, sys
 o = json.load(sys.stdin)
 h = lambda t: (t or {}).get("health", {}).get("$type", "?")
-gw = " ".join(f"{g[\"shop\"]}:{g[\"health\"][\"$type\"][0]}{\"(p)\" if g[\"paused\"] else \"\"}/{g[\"bufferedReadings\"]}" for g in o["gateways"])
+gw = " ".join(
+    f"{g['shop']}:{h(g)[0]}{'(p)' if g['paused'] else ''}/{g['bufferedReadings']}"
+    for g in o["gateways"])
 print(f"gateways {gw}")
-print(f"plantKafka={h(o[\"plantKafka\"])} centralKafka={h(o[\"centralKafka\"])} database={h(o[\"database\"])} consumers={[c[\"health\"][\"$type\"] for c in o[\"consumers\"]]}")
-print(f"liveRate={o[\"liveRate\"]:.1f} drainRate={o[\"drainRate\"]:.1f} mirrorLag={o[\"mirrorLagSeconds\"]} consumerLag={o[\"consumerLag\"]} drainEta={o[\"drainEtaSeconds\"]}")'
+print(f"plantKafka={h(o['plantKafka'])} centralKafka={h(o['centralKafka'])} "
+      f"database={h(o['database'])} consumers={[h(c) for c in o['consumers']]}")
+print(f"liveRate={o['liveRate']:.1f} drainRate={o['drainRate']:.1f} mirrorLag={o['mirrorLagSeconds']} "
+      f"consumerLag={o['consumerLag']} drainEta={o['drainEtaSeconds']}")
+PY
+
+read -r -d '' alarms_py <<'PY' || true
+import json, sys
+for a in json.load(sys.stdin)[:15]:
+    print(a["storedAt"][11:19], a["machineId"], a["kind"], a["severity"], f"{a['latencySeconds']:.1f}s")
+PY
 
 case "$1" in
   overview) get /api/overview | python3 -c "$overview_py" ;;
   proof) q=""; [[ "${2:-}" == "full" ]] && q="?full=true"; get "/api/reconciliation$q" | python3 -c "$summary_py" ;;
-  alarms) get /api/alarms | python3 -c 'import json,sys
-for a in json.load(sys.stdin)[:15]: print(a["storedAt"][11:19], a["machineId"], a["kind"], a["severity"], f"{a[\"latencySeconds\"]:.1f}s")' ;;
+  alarms) get /api/alarms | python3 -c "$alarms_py" ;;
   pause|resume) printf 'POST /api/plant/%s -> ' "$1"; post "/api/plant/$1" ;;
   fault) printf 'POST fault %s %s -> ' "${2:?machine}" "${3:?kind}"; post "/api/machines/$2/faults" "{\"kind\":\"$3\"}" ;;
   watch-proof)
