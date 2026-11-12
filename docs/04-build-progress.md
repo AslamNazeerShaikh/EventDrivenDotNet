@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 16 (rehearsal) in progress; reusable scripts in `src/scripts/`.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, core Tasks 1–16 built; Task 16 review running; C# formatted with CSharpier (hooks active).
 
 ## 1. Where things are
 
@@ -46,7 +46,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 14 | Dashboard (+ the alarm-latency clamp as its own commit) | Done (live: green tiles, 500/s, outage hole, MM2 tile turns Degraded when lagging, banner on API loss, pause → PASS, Resume → WAIT at once) | `225c837`, `626ed6d`, `15686b1`, `44ef7e6` | Clean after 2 fix rounds |
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
-| 16 | Cold-start rehearsal, README | **In progress** (cold start, §14 rehearsal with docker stats, README) | — | — |
+| 16 | Cold-start rehearsal, README | Built; review running (rehearsal: cold start 12 s, PASS 184,700 = 184,700, 30/30 no flicker, peak memory 81.5% plant-kafka, no OOM) | `e8a272e` | Pending; range `abe07c1..e8a272e` |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
 Tests on the branch: 146 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings (after Task 13b). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
@@ -108,7 +108,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 16 (cold-start rehearsal, memory check, README) from `task-16-brief.md`. If the result is lost, check `git log` for `docs: add demo run instructions`. If it exists, review it against the brief; otherwise re-dispatch it. Then the resilience tier R1–R4 (section 5), then the final whole-branch review and the should-fix list in section 5.
+3. **Right now:** In order: (1) finish Task 16's review (range `abe07c1..e8a272e`, report `task-16-report.md`). (2) Controller fixes its own `src/scripts/live/api.sh` (the `overview` and `alarms` Python f-strings use escaped quotes and crash; test offline by piping saved JSON). (3) Correct doc 00 §14 step 4 to the measured drain: a 2.5-minute outage drains in about 2 min 15 s, consumers resume about 45 s after central-up, then run at 1.2–1.5k rows/s. (4) New Task 14b: the dashboard chart and alarms panels must keep their last data with a 'not updating' note while their endpoint fails, instead of 'Waiting for the API…'. Test-first with `bun test`, plus a live central-down screenshot. (5) The should-fix list below. (6) Resilience tier R1–R4 (section 5). (7) Final whole-branch review on Opus.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
