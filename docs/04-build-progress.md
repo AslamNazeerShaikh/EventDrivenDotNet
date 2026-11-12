@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 11 done; Task 12 in progress.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 12 done; Task 13 in progress.
 
 ## 1. Where things are
 
@@ -40,14 +40,14 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 9 | Central store (PostgreSQL) | Done (every reading twice → stored once, counters exact) | `041e123` | Clean |
 | 10 | Consumer host, drain cap | Done (malformed and incomplete records quarantined, never stuck) | `31fa8a7`, `7107eed`, `3c37261` | Clean after 1 fix round |
 | 11 | MirrorMaker 2, end-to-end check | Done (live: 500 machines → PostgreSQL, 0 gaps, 0 duplicate rows, redelivery absorbed; regex fixed to POSIX `[0-9]+`) | `7566fd9`, `18de8cb` | Clean after 1 fix round |
-| 12 | Proof, ETA, watermark maths | **In progress** | — | — |
-| 13 | Control-room API | To do | — | — |
+| 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
+| 13 | Control-room API | **In progress** | — | — |
 | 14 | Dashboard | To do | — | — |
 | 15 | `drill.sh` | To do | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 108 unit and 8 integration tests passing, 0 warnings (after Task 11). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: 117 unit and 8 integration tests passing, 0 warnings (after Task 12). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
 
 ## 4. Rulings so far
 
@@ -101,7 +101,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 12 is being built from `task-12-brief.md` (pure proof, ETA, watermark and health maths in Domain). If the result is lost, check `git log` for `feat(domain): add proof, drain-time and watermark maths`. If it exists, review it against the brief; otherwise re-dispatch the brief. Then Task 13.
+3. **Right now:** Task 13 is being built from `task-13-brief.md` (control-room API, the biggest backend task). If the result is lost, check `git log` for `feat(api): add control-room API with proof and drain estimate`. If it exists, review it against the brief; otherwise re-dispatch the brief. Then Task 14 (dashboard).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
