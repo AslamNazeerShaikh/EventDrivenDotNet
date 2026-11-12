@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:33 IST: resilience design written (d175d4d); spec review running.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:45 IST: resilience spec review done (ready after fixes); docs fix round 1 running.
 
 ## 1. Where things are
 
@@ -48,7 +48,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | Done. Rehearsal PASS 184,700 = 184,700, 12,502 duplicates absorbed, cold start 12 s; README run section | `e8a272e`, `9289603` | Clean after 1 fix round |
-| R1–R4 | Resilience tier (section 5) | Written into docs 00/02/03 (`d175d4d`); spec review running before the build | `d175d4d` | Spec review pending |
+| R1–R4 | Resilience tier (section 5) | Written into docs 00/02/03 (`d175d4d`). Spec review: ready after fixes (2 critical: two gateways could number the same seqs after a one-sided session loss; the simulator is not deterministic per seq, so a takeover cannot replay unsent rows or alarms). Docs fix round 1 running | `d175d4d` | Spec review: fixes in progress |
 
 Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
 
@@ -66,6 +66,10 @@ Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 fronte
 | 8 | Idempotency shown as a hop-by-hop table in doc 02 §4.6, each row with its test; no HTTP `Idempotency-Key` | Every command is idempotent by design |
 | 9 | A failed buffer write is fatal: exit non-zero, Compose restarts from disk | Memory must never run ahead of disk (doc 02 §4.2 rule 2) |
 | 10 | The resilience tier (section 5) comes after Task 16 | A working, rehearsed demo first is the main fallback; failover builds on it |
+| 11 | Doc 00 gives the measured drain: writers resume about 45 s after `central-up`; a 2.5-minute outage drains in about 2 min 15 s | The Task 16 rehearsal measured it; the earlier ~40 s was an estimate |
+| 12 | Task 14b re-scoped: long-running pages already keep their last data; fix only the false "last data" note on a page opened during an outage | The rehearsal screenshot was a fresh page load |
+| 13 | Resilience fix round: fence the lease (any assignment after a lost session reconciles first), drain the sender on revocation, `drained` needs every gateway buffer empty, standbys reconcile every 10 s | The spec review found two writers after a one-sided session loss and a simulator that cannot replay a seq |
+| 14 | Lease assignor `cooperative-sticky`: the current owner keeps the lease, a repaired gateway rejoins as the standby | Matches doc 02 §4.10 row 6; one takeover per failover instead of two |
 
 ## 5. Pending: resilience tier (user requirements, 12 November, evening)
 
@@ -74,7 +78,7 @@ The user asked, in their own words:
 - "make zero downtime solution"
 - "make zero fault tolerant solution"
 
-The design decided, to be written into doc 02 (a new "Fault tolerance and zero downtime" subsection in §4.3, plus §4.10 rows 5 and 6), doc 00 (§3 containers and memory, §10 drills, §13 cut line) and doc 03 (new tasks R1–R4 replacing Stretch 1 and 2), then built:
+**Superseded:** this was the first design. Docs 02 and 03 now hold the source of truth, after the spec review (rulings 13 and 14). The design decided, to be written into doc 02 (a new "Fault tolerance and zero downtime" subsection in §4.3, plus §4.10 rows 5 and 6), doc 00 (§3 containers and memory, §10 drills, §13 cut line) and doc 03 (new tasks R1–R4 replacing Stretch 1 and 2), then built:
 
 **Framing for the panel:** absolute zero is not possible across a network. The target is no single point of failure, zero data loss, failover in seconds, and component downtime that never becomes data downtime, because missed seconds are backfilled from machine history.
 
@@ -109,13 +113,13 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** In order: (1) Spec review of `d175d4d` (R1–R4 in docs 00/02/03; writer's report `resilience-docs-report.md`). (2) Build R1 → R2 → R3, and R4, via SDD from doc 03. (3) Final whole-branch review on Opus (deferred minors are in the ledger).
+3. **Right now:** In order: (1) Docs fix round 1 for R1–R4 (findings in `resilience-spec-review.md`; rulings 13 and 14), then a scoped re-review. (2) Build R1 → R2 → R3, and R4, via SDD from doc 03. (3) Final whole-branch review on Opus (deferred minors are in the ledger).
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
    - `live/api.sh` against the running stack;
    - `progress/progress.py` for this file;
    - `git/commit-push.sh "<subject>" [paths]` to commit, scan for private data and push.
-5. After Task 16: write R1–R4 into docs 02, 00 and 03 (section 5 has the content), commit, then build R1 to R4 the same way.
+5. R1–R4 are specified in doc 03 (written in `d175d4d`, then fixed after the spec review in `resilience-spec-review.md`). Build them the same way, R1 → R2 → R3, and R4.
 6. Keep the rules: test-first, one commit per task in Conventional Commits with the `Co-Authored-By` trailer, and review before the next task. Since 13 November the user wants every step committed **and pushed** to `origin/feat/plant-demo`, together with a progress update; scan for private data before each push.
 7. Update this file after every step and commit it (`docs: update build progress`).
