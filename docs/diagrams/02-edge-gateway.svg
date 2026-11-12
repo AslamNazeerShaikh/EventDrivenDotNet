@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="02-edge-gateway-title 02-edge-gateway-desc" id="d-02-edge-gateway-root">
+        <title id="02-edge-gateway-title">Inside an edge gateway: store, then forward</title>
+        <desc id="02-edge-gateway-desc">Inside one edge gateway, a collector writes each second's readings and every machine's last sequence number to a SQLite buffer in one fsynced transaction; a sender produces the oldest rows, alarms first, to the plant Kafka cluster and deletes a row only after the broker acknowledges it.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #d-02-edge-gateway-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #d-02-edge-gateway-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #d-02-edge-gateway-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#d-02-edge-gateway-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="d-02-edge-gateway-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="d-02-edge-gateway-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="d-02-edge-gateway-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+<!-- Connectors first (behind boxes) -->
+<path d="M 160,288 H 224" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<path d="M 384,288 H 476" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#d-02-edge-gateway-arrow-accent)"/>
+<path d="M 716,276 H 804" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<path d="M 804,300 H 716" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<path d="M 984,276 H 1040" fill="none" stroke="#2e5aa8" stroke-width="1" marker-end="url(#d-02-edge-gateway-arrow-link)"/>
+<path d="M 1040,300 H 984" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<path d="M 596,392 V 448" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<!-- Arrow labels -->
+<rect x="170" y="268" width="44" height="12" rx="2" fill="#f5f5f5"/>
+<text x="192" y="277" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SAMPLES</text>
+<rect x="392" y="268" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="430" y="277" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">1 TX / SECOND</text>
+<rect x="730" y="256" width="60" height="12" rx="2" fill="#f5f5f5"/>
+<text x="760" y="265" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READ BATCH</text>
+<rect x="724" y="308" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="760" y="317" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DELETE ACKED</text>
+<rect x="990" y="256" width="44" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1012" y="265" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PRODUCE</text>
+<rect x="998" y="308" width="28" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1012" y="317" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ACK</text>
+<!-- Nodes -->
+<rect x="40" y="252" width="120" height="72" rx="6" fill="#f5f5f5"/>
+<rect x="40" y="252" width="120" height="72" rx="6" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+<rect x="48" y="260" width="28" height="12" rx="2" fill="none" stroke="#5a6580" stroke-width="0.8" stroke-opacity="0.40"/>
+<text x="62" y="269" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IN</text>
+<text x="100" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">100 machines</text>
+<text x="100" y="306" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one shop · OPC UA</text>
+<rect x="224" y="252" width="160" height="72" rx="6" fill="#f5f5f5"/>
+<rect x="224" y="252" width="160" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="232" y="260" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+<text x="246" y="269" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SVC</text>
+<text x="304" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Collector</text>
+<text x="304" y="306" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">subscribes · assigns seq</text>
+<rect x="476" y="184" width="240" height="208" rx="6" fill="#f5f5f5"/>
+<rect x="476" y="184" width="240" height="208" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1.2" fill-opacity="0.08"/>
+<rect x="484" y="192" width="32" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+<text x="500" y="201" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DISK</text>
+<text x="596" y="220" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">SQLite buffer</text>
+<text x="596" y="236" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">WAL · synchronous=FULL</text>
+<rect x="492" y="252" width="208" height="32" rx="4" fill="#ffffff" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.35"/>
+<text x="500" y="271" fill="#bf4520" font-size="7" font-weight="500" font-family="'Geist Mono', monospace" letter-spacing="0.14em">ALARM LANE</text>
+<rect x="580" y="260" width="16" height="16" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.45"/>
+<rect x="600" y="260" width="16" height="16" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.45"/>
+<rect x="620" y="260" width="16" height="16" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.45"/>
+<rect x="640" y="260" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<rect x="660" y="260" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<rect x="492" y="292" width="208" height="32" rx="4" fill="#ffffff" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.35"/>
+<text x="500" y="311" fill="#bf4520" font-size="7" font-weight="500" font-family="'Geist Mono', monospace" letter-spacing="0.14em">READING LANE</text>
+<rect x="580" y="300" width="16" height="16" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.45"/>
+<rect x="600" y="300" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<rect x="620" y="300" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<rect x="640" y="300" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<rect x="660" y="300" width="16" height="16" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="0.8" fill-opacity="0.45" stroke-opacity="0.45"/>
+<line x1="492" y1="332" x2="700" y2="332" stroke="#bf4520" stroke-width="0.8" stroke-dasharray="3,3" stroke-opacity="0.25"/>
+<rect x="492" y="340" width="208" height="32" rx="4" fill="#ffffff" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.20"/>
+<text x="500" y="359" fill="#2d3142" font-size="8.5" font-family="'Geist Mono', monospace">machine_state</text>
+<text x="692" y="359" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="end">last seq per machine</text>
+<rect x="804" y="252" width="180" height="72" rx="6" fill="#f5f5f5"/>
+<rect x="804" y="252" width="180" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="812" y="260" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+<text x="826" y="269" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SVC</text>
+<text x="894" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sender</text>
+<text x="894" y="306" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">alarms first · oldest first</text>
+<rect x="1040" y="252" width="200" height="72" rx="6" fill="#f5f5f5"/>
+<rect x="1040" y="252" width="200" height="72" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+<rect x="1048" y="260" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.22"/>
+<text x="1062" y="269" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+<text x="1140" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Plant Kafka cluster</text>
+<text x="1140" y="306" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">acks=all · idempotent producer</text>
+<rect x="506" y="448" width="180" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="506" y="448" width="180" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.02" stroke-opacity="0.20"/>
+<rect x="514" y="456" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.22"/>
+<text x="528" y="465" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OBS</text>
+<text x="596" y="482" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Metrics endpoint</text>
+<text x="596" y="498" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">depth · oldest unsent age</text>
+<!-- Callouts (margins) -->
+<path d="M 920,200 Q 894,204 894,248" fill="none" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" stroke-opacity="0.40"/>
+<circle cx="894" cy="252" r="2" fill="#2d3142"/>
+<text x="912" y="176" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">A row leaves the disk only after</text>
+<text x="912" y="194" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">the broker confirms it.</text>
+<path d="M 312,422 Q 420,356 488,356" fill="none" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" stroke-opacity="0.40"/>
+<circle cx="492" cy="356" r="2" fill="#2d3142"/>
+<text x="96" y="436" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">After a restart, each machine's sequence</text>
+<text x="96" y="454" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">resumes from the same transaction.</text>
+<!-- Legend -->
+<line x1="40" y1="652" x2="1240" y2="652" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+<text x="40" y="668" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+<rect x="40" y="676" width="14" height="10" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+<text x="60" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Durable buffer (focal)</text>
+<rect x="172" y="676" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="192" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Gateway process</text>
+<rect x="292" y="676" width="14" height="10" rx="2" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+<text x="312" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Machines</text>
+<rect x="384" y="676" width="14" height="10" rx="2" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+<text x="404" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Plant Kafka</text>
+<rect x="484" y="676" width="14" height="10" rx="2" fill="#2d3142" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,2" fill-opacity="0.02" stroke-opacity="0.20"/>
+<text x="504" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Ops endpoint</text>
+<line x1="588" y1="681" x2="616" y2="681" stroke="#bf4520" stroke-width="1.2" marker-end="url(#d-02-edge-gateway-arrow-accent)"/>
+<text x="624" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">One fsynced commit</text>
+<line x1="736" y1="681" x2="764" y2="681" stroke="#4f5d75" stroke-width="1" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<text x="772" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Data flow</text>
+<line x1="840" y1="681" x2="868" y2="681" stroke="#2e5aa8" stroke-width="1" marker-end="url(#d-02-edge-gateway-arrow-link)"/>
+<text x="876" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Produce to broker</text>
+<line x1="980" y1="681" x2="1008" y2="681" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#d-02-edge-gateway-arrow)"/>
+<text x="1016" y="684" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Ack, delete, metrics</text>
+      </svg>

@@ -1,8 +1,8 @@
 # Second-Round Design Exercise: Plant Outage Without Loss or Duplicates
 
-> As of 11 November 2026
+> As of 11 November 2026, updated 12 November 2026
 >
-> The round-two brief from Anmeda Systems, kept verbatim, followed by what it asks for and how the EDD demo in this repo ([game plan](00-edd-demo-game-plan.md)) can serve as a working proof of the design.
+> The round-two brief from Anmeda Systems, kept verbatim, followed by what it asks for. The answer is [doc 02, the solution design](02-solution-design.md), and the live demo that proves it is specified in [doc 00, the game plan](00-edd-demo-game-plan.md).
 
 ---
 
@@ -10,7 +10,8 @@
 
 1. [The email, verbatim](#1-the-email-verbatim)
 2. [What the email asks](#2-what-the-email-asks)
-3. [How the EDD demo answers the exercise](#3-how-the-edd-demo-answers-the-exercise)
+3. [How the exercise is answered](#3-how-the-exercise-is-answered)
+4. [Toolchain and base images](#4-toolchain-and-base-images)
 
 ---
 
@@ -139,94 +140,55 @@ The panel will likely ask how long recovery takes. While the backlog drains, liv
 
 ---
 
-## 3. How the EDD demo answers the exercise
+## 3. How the exercise is answered
 
-### 3.1 Verdict
+The full answer is [doc 02, the solution design](02-solution-design.md). The demo that proves it live is specified in [doc 00](00-edd-demo-game-plan.md).
 
-The demo already contains most of what the exercise asks for. The main missing piece is an outage drill: a live, time-compressed version of "the central server is down for six hours". With that drill added, the demo becomes a small-scale working proof of the design presented to the panel.
+### 3.1 Where each aspect is answered
 
-Now is the cheapest time to make the changes. Only phase 0 of the [build plan](00-edd-demo-game-plan.md#12-build-plan) (skeleton, contracts, packaging) is built. The producer, outbox relay and consumer (phase 1) do not exist yet.
-
-The producer outbox is not in the game plan, whose producers send straight to Kafka. It was added to the design later, and so far only its table exists in code ([`OutboxSchema`](../src/backend/EventDrivenDesign.Persistence/Schema.cs)). This document is where the outbox is now recorded.
-
-The demo's own brief still holds: two producers, two consumers, one command API, one dashboard, and no service-to-service calls. Every change below keeps it. The presentation is the actual deliverable and the demo supports it, so build only what the drill needs.
-
-### 3.2 How the pieces map
-
-| # | Plant design | Demo component |
-| --- | --- | --- |
-| 1 | Machine | A simulated machine inside a producer, with its own `machine_id`, stream and sequence numbers |
-| 2 | Edge gateway | A producer process: generator, SQLite outbox and relay |
-| 3 | Self-developed Kafka-like broker | Apache Kafka 4.4, single node (Redpanda as the fallback) |
-| 4 | Central consumers | consumer-a and consumer-b in group `event-sinks` |
-| 5 | Central store | SQLite sink files, one per consumer |
-| 6 | Monitoring | The Command API's snapshot plus the React dashboard |
-
-### 3.3 Aspect by aspect
-
-| # | Exercise aspect | Already in the demo's design | What to add |
+| # | Aspect | Answered in doc 02 | What the demo shows ([doc 00](00-edd-demo-game-plan.md)) |
 | --- | --- | --- | --- |
-| 1 | Data flow | producer → Kafka → consumer → SQLite ([game plan §6](00-edd-demo-game-plan.md#6-diagram-2-data-plane-event-flow)) | Present each producer as an edge gateway simulating many machines (section 3.2) |
-| 2 | Local buffering | Producer SQLite outbox plus relay ([`OutboxSchema`](../src/backend/EventDrivenDesign.Persistence/Schema.cs)) | Nothing new: the outbox is the store-and-forward buffer. Show it filling up |
-| 3 | Durability and recovery | The outbox is written in the same transaction as run state; the consumer commits rows before offsets | `synchronous = FULL` on the outbox (section 3.5, gap 1) |
-| 4 | Kafka-like component | Apache Kafka, with Redpanda as a drop-in fallback, so the design already doesn't depend on one broker | Present Kafka as a stand-in and list the guarantees the in-house broker must provide (below) |
-| 5 | Ack and retry | `acks=all` with delivery reports; a row is marked dispatched only after its ack | The relay retries pending rows until the broker is back. The Kafka client gives up on a message after `message.timeout.ms` (5 minutes by default), so its own retries cannot cover a six-hour outage; the outbox can |
-| 6 | Duplicates | Idempotent producer; `INSERT OR IGNORE` on `event_id`; unique index on `(stream_id, seq)` | Nothing |
-| 7 | Ordering | Per partition, by key (the game plan keys by order id) | Key = `machine_id`; the relay publishes in `outbox_id` order |
-| 8 | Backlog | Lag bars on the dashboard that spike and drain | Optional: a relay drain-rate cap so the backlog doesn't starve live data |
-| 9 | Scale | 6 partitions; the consumer group scales live | Simulate 500 machines, 250 per producer. At 1 message per second each, that is 500 events/s, about what the demo script already runs (2 × 200/s) |
-| 10 | Failures | Drills: stop consumer-b, restart producer-a ([game plan §13](00-edd-demo-game-plan.md#13-interview-demo-script-and-talking-points)) | New drills: stop Kafka, and stop both consumers (section 3.4) |
-| 11 | Monitoring | Heartbeat health, lag per partition, resource usage, the reconciliation chain | Outbox depth and the age of the oldest pending row, per producer |
-| 12 | Assumptions and trade-offs | Decision record and rejected options ([game plan §3](00-edd-demo-game-plan.md#3-decision-record)) | Outage sizing: message rate, Kafka retention at least as long as the longest outage, disk size |
+| 1 | Data flow | [§4.1](02-solution-design.md#41-data-flow) | Throughput at every stage, from the gateways to the database |
+| 2 | Local buffering | [§4.2](02-solution-design.md#42-local-buffering) | Gateway buffers fill when the plant broker stops; mirror lag grows when central stops |
+| 3 | Durability and recovery | [§4.3](02-solution-design.md#43-durability-and-recovery) | A killed gateway restarts and its sequences continue from disk |
+| 4 | Kafka-like component | [§4.4](02-solution-design.md#44-role-of-the-kafka-like-component) | Plant and central clusters joined by MirrorMaker 2 |
+| 5 | Ack and retry | [§4.5](02-solution-design.md#45-acknowledgement-and-retry) | Senders keep retrying through every drill, and rows leave only after acknowledgement |
+| 6 | Duplicates | [§4.6](02-solution-design.md#46-duplicate-handling) | The duplicates-absorbed counter rises, while the table holds one row per reading |
+| 7 | Ordering | [§4.7](02-solution-design.md#47-ordering) | 0 sequence gaps per machine after every drill |
+| 8 | Backlog | [§4.8](02-solution-design.md#48-backlog-and-live-data) | A drain-time estimate, an alarm injected during catch-up, and the chart's gap filling in |
+| 9 | Scale | [§4.9](02-solution-design.md#49-scale) | 500 machines at 500 readings per second, with drain rates measured live |
+| 10 | Failures | [§4.10](02-solution-design.md#410-failure-scenarios) | Six scripted drills |
+| 11 | Monitoring | [§4.11](02-solution-design.md#411-monitoring-and-alerting) | One dashboard covering every buffer, lag and alarm |
+| 12 | Assumptions and trade-offs | [§1](02-solution-design.md#1-scenario-and-assumptions), [§4.12](02-solution-design.md#412-assumptions-and-trade-offs) | The demo's own limits, stated in [doc 02 §7](02-solution-design.md#7-live-proof-the-demo) |
 
-Guarantees the in-house broker must provide, which the demo shows with Kafka standing in:
+### 3.2 What changed since the first analysis
 
-1. Durable acknowledgement: acknowledge a write only once it would survive losing a broker node.
-2. Keyed partitions: messages with the same key stay in order.
-3. Offsets and consumer groups: consumers resume from their last committed position.
-4. Idempotent produce: a retried send within a producer session is stored once.
-5. Retention longer than the longest outage the design promises to survive.
+The first version of this section, written on 11 November, proposed adapting the existing single-container demo. Research changed that plan:
 
-### 3.4 The outage drill: six hours compressed to two minutes
+| # | First analysis | Now | Why |
+| --- | --- | --- | --- |
+| 1 | One container under `supervisord` | Docker Compose: 14 containers on three networks | The drills can really stop "central" or cut the "WAN", and each container has its own memory limit |
+| 2 | One Kafka broker | A plant cluster and a central cluster, joined by MirrorMaker 2 | A central outage becomes lag at the plant instead of errors at every gateway |
+| 3 | Two producers emitting `OrderPlaced` and `PaymentCaptured` | Five shop gateways simulating 500 machines that emit readings and alarms | This also settles the open question about event names: the demo now speaks the exercise's language |
+| 4 | SQLite sink files | PostgreSQL with primary key `(machine_id, seq)` | Two writers at once, and SQL queries for the proof |
+| 5 | Producer outbox with `synchronous = NORMAL` | Gateway buffer with `synchronous = FULL` and a separate alarm lane | No loss on a power cut, and alarms are sent first |
+| 6 | API reads the outbox files read-only | API reads each gateway's metrics endpoint | The gateways now run in separate containers |
+| 7 | Deduplication by the idempotent producer plus the sink key | The sink key is the only deduplication point, covering five named duplicate sources | Producer idempotence lasts only one session |
+| 8 | One outage drill: stop Kafka | Six drills, including central down and a WAN cut | Each failure the email names gets its own drill |
 
-| # | Step | What the panel sees |
-| --- | --- | --- |
-| 1 | Both producers run 500 simulated machines at 1 message per second each | Steady throughput |
-| 2 | `docker exec edd supervisorctl stop kafka`: the central link is down | The broker tile goes Down; outbox depth climbs |
-| 3 | Wait two minutes | About 60,000 events buffered at the "edge" (500/s × 120 s) |
-| 4 | `docker exec edd supervisorctl start kafka` | The relay drains the backlog; lag spikes, then falls |
-| 5 | Open Reconciliation once lag is 0 | Generated = persisted, `missing = 0` for every machine, no duplicate rows: both requirements proven live |
-| 6 | Variant: stop both consumers instead of Kafka | Kafka holds the data (24 h retention on `demo.events`), lag grows, then drains on restart |
+---
 
-Step 2 is a network or broker outage, buffered at the edge. Step 6 is a central-server outage, buffered by the broker. Together they show the two-tier buffering a strong answer describes. During step 2, producer heartbeats also stop, because they travel on Kafka (section 3.5, gap 2).
+## 4. Toolchain and base images
 
-### 3.5 Three gaps in the current plan
+The demo targets .NET 11 (`global.json` pins SDK 11.0.100) and runs as Docker Compose ([doc 00 §3](00-edd-demo-game-plan.md#3-containers-networks-and-memory)). These are the sources for the SDK and the container images, as checked on 12 November 2026.
 
-1. **Durability setting.** The only pragma in the code so far is `synchronous = NORMAL` ([`SinkSchema.Pragmas`](../src/backend/EventDrivenDesign.Persistence/Schema.cs)); the outbox has none yet. In WAL mode, `NORMAL` survives an application crash but can roll back the last commits after a power loss or OS crash.
-   - The outbox: the "no data lost" claim needs `FULL`, because the outbox holds the only copy of unsent events.
-   - The sink: under `NORMAL`, a power loss can drop rows whose Kafka offsets were already committed, and Kafka will not redeliver them. Use `FULL` there too, or don't claim the sink survives power loss.
-2. **Visibility during the outage.** Heartbeats travel on Kafka (`telemetry.heartbeats`), so while Kafka is down, the API hears nothing from the producers and marks them Down. That is realistic, because a central site is blind during a link outage. But it hides the buffer the drill is meant to show. The fix: the API opens each producer's outbox file read-only and counts pending rows. That uses the same allowed exception the API already uses for the sink files (.NET services → DB files on disk), so the no-service-to-service rule holds. The outbox files must sit on the shared `/data` volume. A person can also curl the producer's own `/metrics` port.
-3. **A duplicate source to name in the talk.** Kafka's idempotent producer removes duplicates only within one producer session. If the relay restarts during the outage, it resends rows whose acknowledgement was lost, under a new session, and those duplicates land in Kafka. The sink's primary key on `event_id` absorbs them. That is why deduplication must sit at the sink, not only at the producer.
+| # | Link | What it is | What the check found |
+| --- | --- | --- | --- |
+| 1 | [Homebrew cask `dotnet-sdk`](https://formulae.brew.sh/cask/dotnet-sdk) | Microsoft's official, signed SDK installer (`.pkg`), installed to `/usr/local/share/dotnet` | 11.0.100, matching `global.json`. Needs the admin password; several SDKs can sit side by side |
+| 2 | [Homebrew formula `dotnet`](https://formulae.brew.sh/formula/dotnet) | Homebrew's build of .NET from source | 10.0.403, with no .NET 11 yet. It clashes with the cask on `/opt/homebrew/bin/dotnet`, so run `brew unlink dotnet` before installing the cask |
+| 3 | [MCR `dotnet/sdk` tags](https://mcr.microsoft.com/en-us/artifact/mar/dotnet/sdk/tags) | .NET SDK container images | `11.0` and `11.0.100` exist for the build stage, and `dotnet/aspnet:11.0` exists for the runtime stage. Docker Hub lists both under Microsoft as a Verified Publisher |
+| 4 | [Docker Hub `apache/kafka` tags](https://hub.docker.com/r/apache/kafka/tags) | Apache Kafka images published by the Kafka project itself (Sponsored OSS badge) | `4.4.0` exists (pushed 22 October 2026, arm64 and amd64), unpacks Kafka to `/opt/kafka`, and includes MirrorMaker 2 |
+| 5 | [Docker Hub: Docker Official Images](https://hub.docker.com/search?badges=official) | Images Docker curates | `postgres` (`18.6-alpine`) and `nginx` (`1.30-alpine-slim`) qualify. Kafka has none: `library/kafka` does not exist |
+| 6 | [Docker Hub: Official Images and Verified Publishers](https://hub.docker.com/search?badges=official&badges=verified_publisher) | The same, plus images from verified vendors | Microsoft's .NET and Playwright images qualify. The verified Kafka images are either too old (`ubuntu/kafka` stops at 4.1) or an undocumented vendor rebuild (`cleanstart/kafka`), so the demo keeps `apache/kafka`. Bun has no badged image, but it is only used in a build stage |
 
-### 3.6 Changes to fold into the plan
-
-| # | Change | Build phase ([game plan §12](00-edd-demo-game-plan.md#12-build-plan)) |
-| --- | --- | --- |
-| 1 | Generator: a `Machines` setting (250 per producer); each machine gets its own `machine_id`, stream and sequence numbers; `machine_id` is the Kafka key and is carried in the envelope and the sink row | 1. Data plane |
-| 2 | Outbox: `synchronous = FULL`; the relay publishes pending rows in `outbox_id` order and keeps retrying while the broker is down | 1. Data plane |
-| 3 | API: read outbox depth and the oldest pending row's age from the outbox files, read-only | 3. Telemetry and proof |
-| 4 | Dashboard: an outbox panel per producer | 4. Dashboard |
-| 5 | Demo script: the outage drill and its variant from section 3.4, added to [game plan §13](00-edd-demo-game-plan.md#13-interview-demo-script-and-talking-points) | 5. Hardening and rehearsal |
-| 6 | Optional: a relay drain-rate cap | 1. Data plane |
-
-### 3.7 What to skip
-
-| # | Skip | Why |
-| --- | --- | --- |
-| 1 | Building an in-house Kafka-like broker | A large build that adds no proof; the broker guarantees in section 3.3 cover it in the talk |
-| 2 | A separate edge-gateway service | The producer process already plays the gateway |
-| 3 | MQTT or OPC UA machine simulators | Protocol detail the exercise doesn't test; name the protocol as an assumption instead |
-
-### 3.8 Open question
-
-Will this demo be shown to the same Anmeda panel? If yes, rename the events from `OrderPlaced` and `PaymentCaptured` to machine events such as `MachineReading`, so the demo speaks the exercise's language. If the demo answers a different interview brief, keep the current names.
+Use the cask for local development: it is the only one with SDK 11.0.100, and it can hold .NET 10 alongside for other repositories.
