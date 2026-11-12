@@ -57,7 +57,7 @@ The demo simulates 500 machines in five shops. Each shop's edge gateway buffers 
 | 3 | Durability and recovery | A killed gateway restarts, and its sequences continue from disk |
 | 4 | Kafka-like component | Two brokers and a mirror, and every drill recovers |
 | 5 | Ack and retry | Rows leave a gateway only after acknowledgement; senders retry through outages |
-| 6 | Duplicates | The duplicates-absorbed counter rises after a gateway or consumer crash, and the table still holds exactly one row per reading |
+| 6 | Duplicates | The duplicates-absorbed counter rises after the central-outage and consumer-crash drills, and the table still holds exactly one row per reading |
 | 7 | Ordering | Per-machine sequences are contiguous after every drill (0 gaps) |
 | 8 | Backlog and live data | A drain-time estimate counts down; an alarm injected during catch-up arrives in seconds; the chart's outage gap fills in by device time |
 | 9 | Scale | 500 machines and 500 readings per second, with drain rates measured live |
@@ -82,7 +82,7 @@ Versions were checked on 12 November 2026. Pin them exactly.
 | # | Component | Version | Notes |
 | --- | --- | --- | --- |
 | 1 | .NET SDK | 11.0.100 | `global.json`; C# 15 is the default language for `net11.0` |
-| 2 | `Confluent.Kafka` | 2.16.0 | Currently pinned at 2.15.1, so bump it. It ships no `net11.0` build and runs through its `net10.0` build |
+| 2 | `Confluent.Kafka` | 2.16.0 | It ships no `net11.0` build and runs through its `net10.0` build |
 | 3 | `Microsoft.Data.Sqlite` | 11.0.0 | Gateway buffer |
 | 4 | `Npgsql` | 10.0.3 | There is no 11.x yet; it runs on .NET 11 |
 | 5 | `xunit.v3` | 4.0.3 | Runs on Microsoft.Testing.Platform (set in `global.json`) |
@@ -230,9 +230,19 @@ public sealed record ConsumerMetrics(
     long LastBatchMs, ProcessStats Process);
 
 public sealed record ProcessStats(double CpuPercent, long WorkingSetBytes, long GcHeapBytes);
+
+// Source health as the API sees it (section 8). Closed, so a switch over it needs no default arm.
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(Healthy), "Healthy")]
+[JsonDerivedType(typeof(Degraded), "Degraded")]
+[JsonDerivedType(typeof(Down), "Down")]
+public closed record class ServiceHealth;
+public sealed record class Healthy : ServiceHealth;
+public sealed record class Degraded(string Reason) : ServiceHealth;
+public sealed record class Down(DateTimeOffset LastSeen) : ServiceHealth;
 ```
 
-`GatewayCommand` replaces `ProducerCommand`. F1 and F2 re-introduce the `$type` discriminator converter with its contract test. `ServiceHealth` (`Healthy`, `Degraded`, `Down`) stays as it is.
+`GatewayCommand` and `ServiceHealth` travel as JSON with a `$type` discriminator, and a contract test pins each shape.
 
 ---
 
@@ -272,6 +282,7 @@ Machine IDs are `P1-{SHOP}-{type letter}{nnn}`, numbered 001 to 100 within each 
 - **Faults.** Random faults occur at `Gateway__FaultsPerMinute` (default 0.5 per gateway), or on demand with `InjectFault`. A fault pushes the machine's relevant signal past its threshold for 10 ticks. When the signal crosses the threshold on the way up, the collector emits one `MachineAlarm` with the machine's next `alarm_seq`.
 - **One transaction per tick.** The tick's readings, any alarms and the updated `machine_state` rows go into the buffer as one SQLite transaction.
 - **Backfill on restart.** For each machine, the collector regenerates the seconds it missed since `last_device_time_ms` with their original device times, up to `Gateway__HistoryDepthSeconds` (default 600). This emulates re-reading the machine controller's history. A larger gap produces one `DataGap` alarm covering the missing range, so the loss is explicit. Backfill commits in chunks of 60 seconds.
+- **Rebuild on a new file.** If the buffer file is new (`machine_state` is empty), the gateway reads the plant topics before its first tick. For each of its 100 machines, the newest reading gives `last_seq` and `last_device_time_ms`, and the newest alarm gives `last_alarm_seq`. It scans each partition backwards from the end in doubling chunks until every machine is found or the log start is reached; a machine with no record starts at 1. While plant Kafka is unreachable it retries and numbers nothing. Doc 02 §4.3 says why.
 - **Pause.** Pause stops the tick but not the sender. The paused flag is persisted, so a restart while paused stays paused and never backfills the paused time.
 
 ### Buffer
@@ -393,6 +404,8 @@ For each batch:
 3. Commit, then call `StoreOffset` for the last record of each partition. Auto-commit sends the stored offsets every 5 seconds, and the revoke handler commits them synchronously.
 4. If the database fails, retry the same batch with backoff and store no offsets.
 
+**Drain cap.** The readings loop inserts at most `Consumer__MaxRowsPerSecond` rows per second (default 1,000 per writer, so the two writers together drain at 2,000 per second, four times the live rate). A 2-minute outage then drains in about 40 seconds, long enough for the panel to watch the drain-time estimate and inject an alarm. `0` removes the cap, to measure the database's real capacity. The alarms loop is never capped.
+
 ```sql
 WITH ins AS (
   INSERT INTO readings (machine_id, seq, device_time, machine_type, shop, signals)
@@ -484,7 +497,7 @@ The consumer exposes `GET /metrics` (`ConsumerMetrics`) and `GET /healthz` on po
 | 4 | Central Kafka | AdminClient end offsets and committed offsets for `central-readings` and `central-alarms`; a tail consumer tracks the newest mirrored device time | 2 s, and continuously |
 | 5 | PostgreSQL | `machine_progress`, `ingest_totals`, chart buckets and recent alarms | 2 s |
 
-Each source's health comes from the age of its last successful poll: under 3 s is `Healthy`, under 10 s is `Degraded`, and anything older is `Down`. The existing `ServiceHealth` hierarchy carries it.
+Each source's health comes from the age of its last successful poll: under 3 s is `Healthy`, under 10 s is `Degraded`, and anything older is `Down`. `ServiceHealth` (section 4) carries it.
 
 | # | Method | Path | Returns or does |
 | --- | --- | --- | --- |
@@ -552,13 +565,14 @@ Colour is never the only signal: each health state has a text label too. The lay
 
 | # | Command | Runs | Expected |
 | --- | --- | --- | --- |
-| 1 | `drill.sh central-down` | `docker compose stop mm2 consumer-1 consumer-2 central-db central-kafka` | The central tiles go Down; the plant keeps writing; plant alarms stay live |
+| 1 | `drill.sh central-down` | `docker compose kill mm2 consumer-1 consumer-2`, then `docker compose stop central-db central-kafka` | The central tiles go Down; the plant keeps writing; plant alarms stay live. The kills act like a power cut: no offsets are saved on the way down, so the restart redelivers records |
 | 2 | `drill.sh central-up` | `docker compose start central-kafka central-db consumer-1 consumer-2 mm2` | Mirror lag clears in seconds; the database drains while its ETA counts down; the chart gap fills in |
 | 3 | `drill.sh wan-cut` / `wan-restore` | `docker network disconnect` / `connect edd_plant edd-mm2-1` | Mirror lag grows, then clears |
 | 4 | `drill.sh plant-down` / `plant-up` | `docker compose stop` / `start plant-kafka` | Gateway buffers climb, then drain, alarms first |
-| 5 | `drill.sh kill-gateway BDY` | `docker compose kill gateway-bdy`, then `start` | It restarts, sequences continue, missed seconds are backfilled, and duplicates absorbed rises |
+| 5 | `drill.sh kill-gateway BDY` | `docker compose kill gateway-bdy`, then `start` | It restarts, sequences continue, and missed seconds are backfilled. Duplicates absorbed rises only if the kill landed between a broker acknowledgement and the row's delete |
 | 6 | `drill.sh kill-consumer 1` | `docker compose kill consumer-1`, then `start` after 10 s | The group rebalances; the redelivered batch is absorbed |
 | 7 | `drill.sh proof` | Pause, wait for every lag to reach 0, fetch `/api/reconciliation` | Prints the verdict and totals |
+| 8 | `drill.sh lose-gateway-disk BDY` | `docker compose rm -sf gateway-bdy`, `docker volume rm edd_gateway-bdy-data`, then `up -d gateway-bdy` | Numbering continues from the plant log, with no collision and 0 gaps; the seconds lost with the disk are backfilled from machine history |
 
 ---
 
@@ -568,8 +582,8 @@ Every feature is built test-first (red, green, refactor), and no production code
 
 | # | Level | Project and tools | Needs | Covers |
 | --- | --- | --- | --- | --- |
-| 1 | Unit | `src/backend/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
-| 2 | Integration | `src/backend/tests/EventDrivenDesign.IntegrationTests`: xUnit.net v3 + Testcontainers (`apache/kafka:4.4.0`, `postgres:18.6-alpine`) | Docker | The sender against a broker that is paused and resumed: rows stay, then drain, with exact counts. A consumer fed every record twice: one row each and duplicates absorbed = N. A consumer killed before storing offsets: the redelivery is absorbed. A gateway → Kafka → consumer → PostgreSQL pipeline with a broker outage in the middle: generated = stored, 0 gaps |
+| 1 | Unit | `src/backend/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; drain-cap pacing; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
+| 2 | Integration | `src/backend/tests/EventDrivenDesign.IntegrationTests`: xUnit.net v3 + Testcontainers (`apache/kafka:4.4.0`, `postgres:18.6-alpine`) | Docker | The sender against a broker that is paused and resumed: rows stay, then drain, with exact counts. A consumer fed every record twice: one row each and duplicates absorbed = N. A consumer killed before storing offsets: the redelivery is absorbed. A gateway started on an empty file while the plant topic already holds its machines' readings: numbering continues past them. A gateway → Kafka → consumer → PostgreSQL pipeline with a broker outage in the middle: generated = stored, 0 gaps |
 | 3 | End-to-end | `src/backend/tests/EventDrivenDesign.E2ETests`: xUnit.net v3 + Microsoft.Playwright against `docker compose up` | The full stack | The dashboard turns healthy; a 30-second `central-down` drill followed by the proof shows PASS; an injected alarm appears at central |
 
 Commands (run from `src/backend/`, where `global.json` pins the SDK): `dotnet test --project tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj` runs the fast suite. The integration and end-to-end projects are run explicitly. The frontend's type check (`bunx tsc -b`) runs in its build.
@@ -625,20 +639,7 @@ EventDrivenArchitecture/
       └─ scripts/drill.sh
 ```
 
-These go, because the plant design replaces them:
-
-| # | Remove | Replaced by |
-| --- | --- | --- |
-| 1 | `OrderPlaced`, `PaymentCaptured`, `OutboxMessage` (Domain) | `MachineReading`, `MachineAlarm` (Contracts) and the gateway buffer rows |
-| 2 | `ProducerCommand` (`Start`, `Stop`, `SetRate`), `CommandAck`, `Heartbeat` | `GatewayCommand`, `GatewayMetrics`, `ConsumerMetrics` |
-| 3 | `TopicNames` values (`demo.events`, `control.*`, `telemetry.heartbeats`) | The four topics in section 4 |
-| 4 | `RateMath` | Nothing: one reading per machine per second needs no rate splitting |
-| 5 | `SinkSchema` (SQLite sink) and `OutboxSchema` | `src/deployment/postgres/01-schema.sql` and the gateway buffer schema |
-| 6 | `Envelope` `x-run-id`, `x-stream-id` and `x-seq` headers | CloudEvents headers (section 4) |
-| 7 | `EventDrivenDesign.Producer.slnx` | `EventDrivenDesign.Gateway.slnx` |
-| 8 | `deploy/supervisord.conf`, `deploy/kafka.properties`, `deploy/scripts/*`, `deploy/nginx.conf`, the single-image `Dockerfile` | `src/deployment/compose.yaml`, the multi-target `src/deployment/Dockerfile` and `src/deployment/*` above |
-| 9 | `docs/diagrams/architecture*` (the single-container diagram) | `docs/diagrams/01–08` |
-| 10 | `IMessageHandler` (Application), if nothing implements it after F6 | The exhaustive switch over `GatewayCommand` |
+The earlier order-and-payment skeleton was removed on 12 November 2026, so the build starts from these empty homes and carries nothing over.
 
 ---
 
@@ -648,16 +649,28 @@ Build feature by feature. Each feature ends with something that runs and a green
 
 | # | Feature | Build | Done when |
 | --- | --- | --- | --- |
-| F0 | Housekeeping | Remove the items in section 12; place every file per the section 12 rules; bump the package pins; add the Compose skeleton in `src/deployment/` with `plant-kafka`, `central-kafka` and `central-db` | From `src/deployment/`, `docker compose up` shows the three healthy; the unit tests pass |
+| F0 | Skeleton | Create the solution, props files, `global.json` and the unit-test project in `src/backend/` per section 12, with the section 2 pins; add the contracts and their shape tests; add the Compose skeleton in `src/deployment/` with `plant-kafka`, `central-kafka` and `central-db` | From `src/deployment/`, `docker compose up` shows the three healthy; the contract tests pass |
 | F1 | Machine simulator | Catalogue, signal model, faults and alarms in Domain | Unit tests: the same seed gives the same series; values stay in band; a fault crosses its threshold once and yields one alarm |
 | F2 | Gateway buffer | Schema, single writer, tick transaction, sequence resume, lanes, delete-on-ack, backfill | Unit tests on temporary files, including close-and-reopen and simulated crashes between steps |
-| F3 | Gateway sender and host | Sender states, `/metrics`, `/control`, Dockerfile target, `plant-topics`, five gateways | An integration test: broker paused → rows stay → resumed → exact drain. Compose: 500 records/s on `machine.readings` |
+| F3 | Gateway sender and host | Sender states, rebuild from the plant log, `/metrics`, `/control`, Dockerfile target, `plant-topics`, five gateways | An integration test: broker paused → rows stay → resumed → exact drain. Compose: 500 records/s on `machine.readings` |
 | F4 | Consumer and PostgreSQL | Schema, batch insert with progress, totals, rejected records, alarm loop | Integration tests: duplicates absorbed; a crash before storing offsets is absorbed |
 | F5 | MirrorMaker 2 and the full pipeline | `mm2.properties`; central topics | After pausing: generated = stored for all 500 machines; drill 1 run by hand |
 | F6 | Control-room API | Sources, endpoints, proof, ETA, watermark, tails | Unit tests on the maths; query tests against a PostgreSQL container |
 | F7 | Dashboard | Panels, controls, chart | Playwright: tiles turn healthy and the chart renders |
 | F8 | Drills and proof | `drill.sh`; the end-to-end drill test; alarm injection | Playwright: `central-down` → proof PASS |
 | F9 | Hardening and rehearsal | Check memory under an outage with `docker stats`; README; rehearse the demo script | Every drill passes twice from a cold start, and no container exceeds its limit |
+
+### Cut line: 24 hours to the panel
+
+The demo is due within 24 hours of 12 November 2026, so this cut line overrides the table above. Stretch items are built in the order listed, only once every must item works.
+
+| # | Tier | Scope |
+| --- | --- | --- |
+| 1 | Must | F0–F6. F7: dashboard panels 1–4 plus the pause, resume and inject-alarm controls. F8: the `central-down`, `central-up`, `kill-gateway`, `kill-consumer` and `proof` drills. Tests: unit tests for the buffer, sequencing and proof maths, plus two integration tests, a consumer fed every record twice (one row each) and a sender across a broker pause (exact drain). F9: one cold-start rehearsal of section 14, steps 1–6, with `docker stats` watched |
+| 2 | Stretch 1 | Rebuild from the plant log, its integration test, and drill 8 |
+| 3 | Stretch 2 | Backfill on restart and the `DataGap` alarm. Without it, a killed gateway's few seconds of downtime show as a gap in device time, never in sequence |
+| 4 | Stretch 3 | The WAN-cut and plant-down drills, and the plant-side alarm list |
+| 5 | Cut | The Playwright tests and the full-pipeline integration test: the live proof stands in for them. Passing every drill twice: once is enough |
 
 ---
 
@@ -668,8 +681,8 @@ About 12 minutes, told as one story: break the central site, watch the plant car
 1. **The design (2 min).** Walk through doc 02's [diagram 1](diagrams/01-plant-to-central.svg): two tiers of buffering, one deduplication point.
 2. **Steady state.** Open `:3000`. Everything is green, 500 readings per second, freshness about 1 s.
 3. **Central down.** Run `drill.sh central-down` and wait 2 minutes. The plant keeps writing, plant alarms stay live, and about 60,000 readings build up in the plant cluster.
-4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds, then the database drains as its ETA counts down. The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
-5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts, its sequences continue, its missed seconds are backfilled, and duplicates absorbed rises.
+4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds, then the database drains at the 4× cap as its ETA counts down (about 40 seconds). The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
+5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts, its sequences continue, and its missed seconds are backfilled. Say up front that duplicates absorbed rises only if the kill lands between an acknowledgement and a delete; the central-down drill has already shown the counter working.
 6. **The proof.** Run `drill.sh proof`. Generated = stored for every machine, 0 gaps, 0 duplicate rows, and N duplicates absorbed: PASS.
 7. **Optional.** Run the WAN cut, plant broker and consumer crash drills.
 

@@ -218,7 +218,7 @@ The rules that make the buffer safe:
 When a gateway restarts, it recovers in four steps:
 
 1. Open the SQLite file. Unacknowledged rows are still there.
-2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap.
+2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap. If the file is new (a replaced disk or a standby gateway), rebuild `machine_state` from the plant log first: the newest reading and alarm for each of its machines in the plant topics give the last sequence numbers and device time. Until the plant cluster answers, the gateway numbers nothing, because a number it cannot place could collide with a stored reading.
 3. Backfill the seconds it missed from each machine's history (OPC UA HistoryRead), up to the history depth. Anything older is recorded as an explicit gap.
 4. Start the sender. If a backlog exists, the sender starts in its catch-up state.
 
@@ -234,7 +234,7 @@ The broker appears twice: once in the plant (the buffer that rides out the outag
 | --- | --- | --- | --- |
 | 1 | Durable acknowledgement: acknowledge a write only once it survives losing a node | Gateways delete on acknowledgement | `acks=all`, replication factor 3, `min.insync.replicas=2`, `unclean.leader.election.enable=false` |
 | 2 | Keyed partitions, ordered per key | Each machine's readings stay in order in transit | Key = `machine_id`; the default partitioner hashes it |
-| 3 | Offsets and consumer groups | Every consumer resumes exactly where it stopped | `enable.auto.commit=false`; commit after the database commit |
+| 3 | Offsets and consumer groups | Every consumer resumes at or before where it stopped, never after | Offsets are stored only after the database commit (`enable.auto.offset.store=false`) and committed every 5 s; what is redelivered, the database key absorbs |
 | 4 | Idempotent produce within a session | Removes duplicates from the client's own retries | `enable.idempotence=true` |
 | 5 | Retention longer than the longest outage | The backlog must still exist when central returns | `retention.ms` = 7 days at the plant, 3 days at central |
 | 6 | Cross-site replication with saved positions | Moves data plant → central and resumes after a break | MirrorMaker 2 (any at-least-once log shipping would do) |
@@ -256,7 +256,7 @@ The Kafka client on its own gives up on a message after `message.timeout.ms`, wh
 
 At-least-once delivery means resends, and resends mean duplicates. They are removed at exactly one place.
 
-![Where duplicates come from: gateway resends, MirrorMaker 2 restarts, store writer crashes and history backfill all lead to one unique key on (machine_id, seq) in the central database, which inserts each reading once and counts the duplicates it skipped.](diagrams/05-duplicates.svg)
+![Where duplicates come from: gateway resends, MirrorMaker 2 restarts and store writer crashes all lead to one unique key on (machine_id, seq) in the central database, which inserts each reading once and counts the duplicates it skipped. Client retries and history backfill are stopped before the key.](diagrams/05-duplicates.svg)
 
 *Source: [05-duplicates.html](diagrams/05-duplicates.html)*
 
@@ -266,7 +266,7 @@ At-least-once delivery means resends, and resends mean duplicates. They are remo
 | 2 | Gateway resend after a restart | The gateway crashed after the broker stored a row but before the row was deleted | The database key. A new producer session gets a new producer ID, so the broker cannot recognise the resend |
 | 3 | MirrorMaker 2 restart | MirrorMaker 2 copies from its last saved offset, which may be behind what it already wrote | The database key |
 | 4 | Store writer crash | The database commit succeeded, but the offset commit did not | The database key |
-| 5 | History backfill overlap | After a restart, history re-reads a sample that was already buffered | Mostly the gateway, which skips samples at or before `last_device_time_ms`; the database key catches the rest |
+| 5 | History backfill overlap | After a restart, history re-reads a sample that was already buffered | The gateway, which backfills only samples newer than `last_device_time_ms`. That value commits with the readings, or is rebuilt from the plant log (section 4.3), so the skip is exact and no overlap reaches the database |
 
 ```sql
 INSERT INTO readings (machine_id, seq, device_time, machine_type, shop, signals)
@@ -307,7 +307,7 @@ Kafka has no built-in priority, so live data is kept fresh by three mechanisms:
 
 1. **Alarm lane.** Alarms have their own topic and their own lane in the gateway buffer, which drains first. At central, a separate consumer group reads them, so alarm latency does not depend on the readings backlog.
 2. **Live tail.** A second reader starts at the latest offset of the central topic and feeds the live dashboard, while the store writers work through the backlog from the oldest offset. The plant operations view stays live throughout, because it reads the plant cluster.
-3. **Protect central.** The drain is capped so it cannot overload the database: Kafka client quotas on MirrorMaker 2, or a batch-rate limit on the store writers. Capacity is sized at four times the live rate or more.
+3. **Protect central.** The store writers cap their insert rate at four times the live rate (the two-hour row above), and the database is sized to sustain that. MirrorMaker 2 is not capped, so the central log catches up as fast as the WAN allows and the live tail reads current data.
 
 Reports for the outage window stay marked "provisional" until the data is complete (section 6).
 
@@ -338,12 +338,12 @@ Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plan
 | 3 | One plant broker fails | Under-replicated partitions | Leaders move to the remaining brokers; writes continue with 2 of 3 replicas | Replace the broker; it re-syncs | No |
 | 4 | Whole plant cluster down | Gateway send errors; buffer depth and oldest-age alerts | Gateways buffer on disk (24 hours of capacity) | Gateways drain when the cluster returns, alarms first | No |
 | 5 | Gateway process crash or reboot | Machine-silence and gateway-health alerts | Committed rows are safe on disk | Restart, resume sequences, backfill from machine history, resend | No; resends become duplicates and are absorbed |
-| 6 | Gateway disk or hardware failure | Gateway health | Its unsent rows are lost with the disk | The standby takes over and re-reads machine history within its depth | Only beyond the history depth, and then reported as an explicit gap |
+| 6 | Gateway disk or hardware failure | Gateway health | Its unsent rows are lost with the disk | The standby takes over once the failed gateway is fenced off, rebuilds its sequence state from the plant log, and re-reads machine history within its depth | Only beyond the history depth, and then reported as an explicit gap |
 | 7 | Store writer crash mid-batch | Consumer group rebalance | Uncommitted offsets are redelivered | Another instance takes the partitions | No; repeats are absorbed |
 | 8 | Database down or failing over | Store-writer errors; lag | Store writers retry and do not commit offsets | Resume after failover | No |
 | 9 | A malformed record | Parse failure | The record goes to a `rejected_records` table with its partition and offset, in the same transaction | Fix and replay from that table | No; it is quarantined, not dropped |
 | 10 | Outage longer than plant retention | The retention-headroom alert fires days ahead | — | Extend retention or add disk before expiry | Only if the alert is ignored for days |
-| 11 | Machine clock jumps | Clock-skew alert at the gateway | The broker rejects timestamps more than 1 hour ahead | Fix NTP; the gateway's own receive time is kept as a fallback | No |
+| 11 | Machine clock jumps | Clock-skew alert at the gateway | The broker rejects readings stamped more than 1 hour ahead; they wait in the gateway buffer | Fix NTP; the waiting rows are sent once their timestamps fall within the broker's limit | No |
 
 ### 4.11 Monitoring and alerting
 
@@ -364,7 +364,7 @@ Each site has its own monitoring, so the plant can alert while central is down.
 | 11 | Rejected records | Central database | Any | — | Malformed data waiting for a fix |
 | 12 | Clock skew: gateway time minus device time | Gateway | 1 s | 1 min | Report ordering, and the broker's future-timestamp limit |
 
-In production, each site runs Prometheus, Alertmanager and Grafana. In the demo, the control-room API computes these signals and the dashboard shows them.
+In production, each site runs Prometheus, Alertmanager and Grafana. In the demo, the control-room API computes signals 1, 2 and 6 to 11, and the dashboard shows them as live numbers (signal 1 as buffer depth). Signals 3, 4, 5 and 12 need real machines, three brokers or real clocks, and the warn and page thresholds belong to Alertmanager.
 
 ### 4.12 Assumptions and trade-offs
 
@@ -412,7 +412,7 @@ After an outage, six hours of old readings arrive in a burst. If charts bucketed
 
 ## 7. Live proof: the demo
 
-The panel sees the design run, not just described. Everything in sections 3 to 6 runs on one laptop with Docker Compose. Every container runs a Docker Official Image or an image from a Verified Publisher, except Kafka. Kafka has no Docker Official Image, so the demo uses the Apache Kafka project's own `apache/kafka` image. The build details are in [doc 00](00-edd-demo-game-plan.md).
+The panel sees the design run, not just described. The data path in sections 3 to 6 runs on one laptop with Docker Compose, simplified only as the first table below says. Every container runs a Docker Official Image or an image from a Verified Publisher, except Kafka. Kafka has no Docker Official Image, so the demo uses the Apache Kafka project's own `apache/kafka` image. The build details are in [doc 00](00-edd-demo-game-plan.md).
 
 ![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and five gateways), a central network (central Kafka, two consumers, PostgreSQL), MirrorMaker 2 spanning both, and an ops network for the control-room API and dashboard.](diagrams/08-demo-deployment.svg)
 
@@ -424,13 +424,15 @@ The panel sees the design run, not just described. Everything in sections 3 to 6
 | 2 | Three brokers per site | One broker per site | Replication is Kafka's well-tested job; the drills exercise this design's own code |
 | 3 | A real WAN link | MirrorMaker 2 disconnected from the plant's Docker network | MirrorMaker 2 sees exactly the same failure |
 | 4 | A six-hour outage | 2 minutes for the live run, 6 minutes for a full run | Everything scales linearly; section 5 has the full-size numbers |
+| 5 | Twelve monitoring signals with warn and page alerts | Eight signals as live numbers on one dashboard, with no alerting (section 4.11) | The missing signals need real hardware; alerting is standard tooling, not this design |
+| 6 | Buffer budget alerts and reserved alarm space at 100% (section 4.2, rule 5) | Buffer depth and oldest unsent age only | A drill never fills a gateway disk |
 
 | # | Drill | What the panel sees | Aspects it proves |
 | --- | --- | --- | --- |
-| 1 | **Central down:** stop central Kafka, MirrorMaker 2, the consumers and the database | The plant keeps writing and mirror lag grows. On restore, the chart's gap fills in and the proof panel shows 0 missing and 0 duplicates | 1, 2, 4, 5, 6, 8 |
+| 1 | **Central down:** kill MirrorMaker 2 and the consumers, as a power cut would, then stop central Kafka and the database | The plant keeps writing and mirror lag grows. On restore, the chart's gap fills in, the redelivered records raise the duplicates-absorbed counter, and the proof panel shows 0 missing and 0 duplicate rows | 1, 2, 4, 5, 6, 8 |
 | 2 | **WAN cut:** disconnect MirrorMaker 2 from the plant network | The same recovery as drill 1, caused by a link failure | 2, 10 |
 | 3 | **Plant broker down** | Each gateway's buffer depth climbs, then drains with alarms first | 2, 3, 5, 8 |
-| 4 | **Gateway crash:** kill a gateway mid-send | It restarts, its sequences continue, and the duplicates-absorbed counter rises | 3, 6, 7 |
+| 4 | **Gateway crash:** kill a gateway mid-send | It restarts, its sequences continue with no gap, and anything it resends is absorbed by the key | 3, 6, 7 |
 | 5 | **Consumer crash:** kill a consumer mid-batch | The group rebalances and the redelivered batch is absorbed | 6, 10 |
 | 6 | **Alarm during catch-up:** inject an alarm while drill 1 recovers | The alarm reaches central within seconds while the readings backlog is still draining | 8 |
 
