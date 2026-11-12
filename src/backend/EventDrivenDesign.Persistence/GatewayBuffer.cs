@@ -51,6 +51,9 @@ public sealed class GatewayBuffer : IAsyncDisposable
     private readonly Thread _thread;
     private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _disposed;
+    // Exact row counts per lane: seeded once at open, then changed only by the writer thread after a commit,
+    // so Stats() never scans the table. Index 0 = alarms, 1 = readings.
+    private readonly long[] _counts = new long[2];
 
     private GatewayBuffer(string path)
     {
@@ -65,6 +68,8 @@ public sealed class GatewayBuffer : IAsyncDisposable
         Exec(_writer, "PRAGMA synchronous = FULL");
         Exec(_writer, Schema);
         IsNew = Scalar<long>("SELECT COUNT(*) FROM machine_state") == 0;
+        _counts[(int)Lane.Alarm] = Scalar<long>("SELECT COUNT(*) FROM outbox WHERE lane = 0");
+        _counts[(int)Lane.Reading] = Scalar<long>("SELECT COUNT(*) FROM outbox WHERE lane = 1");
         _thread = new Thread(WriterLoop) { IsBackground = true, Name = "gateway-buffer-writer" };
         _thread.Start();
     }
@@ -134,6 +139,7 @@ public sealed class GatewayBuffer : IAsyncDisposable
         }
 
         tx.Commit();
+        foreach (var row in tick.Rows) Interlocked.Increment(ref _counts[(int)row.Lane]);
     }, ct);
 
     public Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken ct) => Submit(conn =>
@@ -142,15 +148,18 @@ public sealed class GatewayBuffer : IAsyncDisposable
         {
             using var delete = conn.CreateCommand();
             delete.Transaction = tx;
-            delete.CommandText = "DELETE FROM outbox WHERE id = $id";
+            delete.CommandText = "DELETE FROM outbox WHERE id = $id RETURNING lane";
             var id = delete.Parameters.Add("$id", SqliteType.Integer);
+            var removed = new long[2];
             foreach (var value in ids)
             {
                 id.Value = value;
-                delete.ExecuteNonQuery();
+                if (delete.ExecuteScalar() is long lane) removed[lane]++; // a missing id returns no row
             }
 
             tx.Commit();
+            Interlocked.Add(ref _counts[0], -removed[0]);
+            Interlocked.Add(ref _counts[1], -removed[1]);
         }
 
         Exec(conn, "PRAGMA incremental_vacuum(256)");
@@ -184,17 +193,12 @@ public sealed class GatewayBuffer : IAsyncDisposable
 
     public BufferStats Stats()
     {
-        using var conn = OpenReader();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT (SELECT COUNT(*) FROM outbox WHERE lane = 1),
-                   (SELECT COUNT(*) FROM outbox WHERE lane = 0),
-                   (SELECT MIN(device_time_ms) FROM outbox)
-            """;
-        using var r = cmd.ExecuteReader();
-        r.Read();
-        var oldest = r.IsDBNull(2) ? (long?)null : r.GetInt64(2);
-        return new BufferStats(r.GetInt64(0), r.GetInt64(1), oldest, FileLength(_path) + FileLength(_path + "-wal"));
+        // Oldest = the lower of each lane's first row: an indexed (lane, id) lookup, ids grow with insertion.
+        var oldest = new[] { Lane.Alarm, Lane.Reading }
+            .Select(lane => Scalar<long?>($"SELECT device_time_ms FROM outbox WHERE lane = {(int)lane} ORDER BY id LIMIT 1"))
+            .Min();
+        return new BufferStats(Volatile.Read(ref _counts[(int)Lane.Reading]), Volatile.Read(ref _counts[(int)Lane.Alarm]),
+            oldest, FileLength(_path) + FileLength(_path + "-wal"));
     }
 
     public async ValueTask DisposeAsync()
@@ -203,6 +207,19 @@ public sealed class GatewayBuffer : IAsyncDisposable
         _queue.Writer.Complete();
         await _stopped.Task; // the writer drains queued operations before it exits
         _writer.Dispose();
+    }
+
+    /// <summary>Test hook: reads PRAGMA synchronous on the writer connection itself (it is per connection).</summary>
+    internal async Task<long> ReadWriterSynchronousAsync()
+    {
+        long value = 0;
+        await Submit(conn =>
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA synchronous";
+            value = Convert.ToInt64(cmd.ExecuteScalar());
+        }, CancellationToken.None);
+        return value;
     }
 
     private Task Submit(Action<SqliteConnection> run, CancellationToken ct)
