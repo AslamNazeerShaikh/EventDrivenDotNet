@@ -46,7 +46,7 @@ public sealed class CentralQueries(NpgsqlDataSource db)
     {
         await using var cmd = db.CreateCommand("""
             SELECT machine_id, alarm_seq, kind, severity, device_time, stored_at,
-                   extract(epoch FROM stored_at - device_time)::double precision
+                   greatest(extract(epoch FROM stored_at - device_time), 0)::double precision
             FROM alarms ORDER BY stored_at DESC, machine_id, alarm_seq LIMIT @limit
             """);
         cmd.Parameters.AddWithValue("limit", limit);

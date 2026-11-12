@@ -93,4 +93,16 @@ public sealed class CentralQueriesTests : IAsyncLifetime
         alarms.Should().OnlyContain(a => a.LatencySeconds >= 29 && a.LatencySeconds < 40);
         (await _queries.RecentAlarmsAsync(1, ct)).Should().ContainSingle();
     }
+
+    [Fact]
+    public async Task Alarm_latency_is_clamped_at_zero_when_device_time_is_ahead_of_storage()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var ahead = DateTimeOffset.UtcNow.AddSeconds(5);
+        await _store.InsertAlarmsAsync([new("m1", 1, 5, ahead, AlarmKind.Overheat, "critical", "temp_c", 99, 90)], [], "w1", ct);
+
+        var alarms = await _queries.RecentAlarmsAsync(50, ct);
+
+        alarms.Should().ContainSingle().Which.LatencySeconds.Should().Be(0);
+    }
 }
