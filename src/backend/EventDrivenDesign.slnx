@@ -7,6 +7,7 @@
     <Project Path="EventDrivenDesign.Persistence/EventDrivenDesign.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/EventDrivenDesign.IntegrationTests/EventDrivenDesign.IntegrationTests.csproj" />
     <Project Path="tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj" />
   </Folder>
 </Solution>
