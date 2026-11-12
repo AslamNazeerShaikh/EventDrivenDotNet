@@ -29,14 +29,27 @@ public class ProofTests
     [Fact]
     public void Matching_counts_still_wait_while_in_flight()
     {
-        Proof.Reconcile(Generated, Complete, 0, 0, allPaused: true, drained: false).Verdict.Should().Be("WAIT");
-        Proof.Reconcile(Generated, Complete, 0, 0, allPaused: false, drained: true).Verdict.Should().Be("WAIT");
+        Proof
+            .Reconcile(Generated, Complete, 0, 0, allPaused: true, drained: false)
+            .Verdict.Should()
+            .Be("WAIT");
+        Proof
+            .Reconcile(Generated, Complete, 0, 0, allPaused: false, drained: true)
+            .Verdict.Should()
+            .Be("WAIT");
     }
 
     [Fact]
     public void A_hole_fails_once_drained()
     {
-        var r = Proof.Reconcile(new Dictionary<string, long> { ["B"] = 5 }, [Row("B", 4, 5)], 0, null, true, true);
+        var r = Proof.Reconcile(
+            new Dictionary<string, long> { ["B"] = 5 },
+            [Row("B", 4, 5)],
+            0,
+            null,
+            true,
+            true
+        );
         r.Missing.Should().Be(1);
         r.Gaps.Should().Be(1);
         r.Verdict.Should().Be("FAIL");
@@ -45,7 +58,14 @@ public class ProofTests
     [Fact]
     public void Machine_with_nothing_stored_is_all_missing()
     {
-        var r = Proof.Reconcile(new Dictionary<string, long> { ["C"] = 3 }, [], 0, null, true, true);
+        var r = Proof.Reconcile(
+            new Dictionary<string, long> { ["C"] = 3 },
+            [],
+            0,
+            null,
+            true,
+            true
+        );
         r.Missing.Should().Be(3);
         r.Gaps.Should().Be(0);
         r.Verdict.Should().Be("FAIL");
@@ -54,7 +74,14 @@ public class ProofTests
     [Fact]
     public void Unknown_machine_is_reported_and_does_not_hide_missing()
     {
-        var r = Proof.Reconcile(new Dictionary<string, long> { ["A"] = 10 }, [Row("A", 8, 8), Row("Z", 2, 2)], 0, null, true, true);
+        var r = Proof.Reconcile(
+            new Dictionary<string, long> { ["A"] = 10 },
+            [Row("A", 8, 8), Row("Z", 2, 2)],
+            0,
+            null,
+            true,
+            true
+        );
         r.Stored.Should().Be(10);
         r.Missing.Should().Be(2);
         r.Machines.Select(m => m.MachineId).Should().Equal("A", "Z");
@@ -73,8 +100,10 @@ public class ProofTests
     [Fact]
     public void Watermark_ignores_machines_with_gaps()
     {
-        Proof.Watermark([Row("A", 10, 10, 5), Row("B", 5, 5, 3), Row("C", 4, 5, 1)])
-            .Should().Be(T.AddMinutes(3));
+        Proof
+            .Watermark([Row("A", 10, 10, 5), Row("B", 5, 5, 3), Row("C", 4, 5, 1)])
+            .Should()
+            .Be(T.AddMinutes(3));
         Proof.Watermark([Row("C", 4, 5, 1)]).Should().BeNull();
     }
 
@@ -82,9 +111,18 @@ public class ProofTests
     public void Health_by_age()
     {
         Proof.HealthFromAge(TimeSpan.FromSeconds(2), T).Should().BeOfType<Healthy>();
-        var degraded = Proof.HealthFromAge(TimeSpan.FromSeconds(5), T).Should().BeOfType<Degraded>().Subject;
+        var degraded = Proof
+            .HealthFromAge(TimeSpan.FromSeconds(5), T)
+            .Should()
+            .BeOfType<Degraded>()
+            .Subject;
         degraded.Reason.Should().Be("no update for 5 s");
-        Proof.HealthFromAge(TimeSpan.FromSeconds(12), T).Should().BeOfType<Down>().Which.LastSeen.Should().Be(T);
+        Proof
+            .HealthFromAge(TimeSpan.FromSeconds(12), T)
+            .Should()
+            .BeOfType<Down>()
+            .Which.LastSeen.Should()
+            .Be(T);
     }
 
     [Fact]

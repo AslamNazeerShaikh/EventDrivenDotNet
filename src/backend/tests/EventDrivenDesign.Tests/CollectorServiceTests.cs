@@ -23,7 +23,16 @@ public sealed class CollectorServiceTests : IDisposable
     {
         var buffer = GatewayBuffer.Open(Path.Combine(_dir, "buffer.db"));
         var collector = new Collector("P1", "BDY", 7, buffer.LoadState());
-        return (buffer, new CollectorService(collector, buffer, MachineCatalog.ForShop("P1", "BDY"), faultsPerMinute, _time));
+        return (
+            buffer,
+            new CollectorService(
+                collector,
+                buffer,
+                MachineCatalog.ForShop("P1", "BDY"),
+                faultsPerMinute,
+                _time
+            )
+        );
     }
 
     private async Task TickOnceAsync(CollectorService service, CancellationToken ct)
@@ -71,8 +80,10 @@ public sealed class CollectorServiceTests : IDisposable
 
         await TickOnceAsync(service, ct);
 
-        await FluentActions.Awaiting(() => service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5), ct))
-            .Should().ThrowAsync<Exception>();
+        await FluentActions
+            .Awaiting(() => service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5), ct))
+            .Should()
+            .ThrowAsync<Exception>();
         service.ExecuteTask!.IsFaulted.Should().BeTrue();
     }
 }

@@ -5,14 +5,26 @@ using EventDrivenDesign.Persistence;
 
 namespace EventDrivenDesign.Gateway;
 
-public enum SenderState { Starting, Sending, CatchingUp, Retrying, Stopping }
+public enum SenderState
+{
+    Starting,
+    Sending,
+    CatchingUp,
+    Retrying,
+    Stopping,
+}
 
 /// <summary>
 /// The relay half of the transactional outbox (doc 02 §4.5): produce buffered rows, wait for the broker's
 /// acknowledgement, and delete only the rows that were acknowledged. A produce failure is counted, the row stays
 /// in the buffer, and the loop backs off and reads it again. Buffer exceptions propagate (the host treats them as fatal).
 /// </summary>
-public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> producer, string shop, TimeProvider time)
+public sealed class Sender(
+    GatewayBuffer buffer,
+    IProducer<string, byte[]> producer,
+    string shop,
+    TimeProvider time
+)
 {
     private const int LiveBatch = 1_000;
     private const int CatchUpBatch = 5_000;
@@ -51,7 +63,9 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
         {
             while (!ct.IsCancellationRequested)
             {
-                var rows = buffer.ReadOldest(State == SenderState.CatchingUp ? CatchUpBatch : LiveBatch);
+                var rows = buffer.ReadOldest(
+                    State == SenderState.CatchingUp ? CatchUpBatch : LiveBatch
+                );
                 if (rows.Count == 0)
                 {
                     SetState(SenderState.Sending);
@@ -63,7 +77,10 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
                 {
                     attempt = 0;
                     var oldest = buffer.Stats().OldestDeviceTimeMs;
-                    var behind = oldest is { } ms && time.GetUtcNow() - DateTimeOffset.FromUnixTimeMilliseconds(ms) > CatchUpAge;
+                    var behind =
+                        oldest is { } ms
+                        && time.GetUtcNow() - DateTimeOffset.FromUnixTimeMilliseconds(ms)
+                            > CatchUpAge;
                     SetState(behind ? SenderState.CatchingUp : SenderState.Sending);
                 }
                 else if (!ct.IsCancellationRequested)
@@ -73,9 +90,7 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
                 }
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
 
         SetState(SenderState.Stopping);
         producer.Flush(FlushWait); // in-flight reports are not abandoned; whatever stays unacknowledged stays on disk
@@ -91,13 +106,15 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
 
         void Report(int i, bool ok)
         {
-            if (ok) Volatile.Write(ref acked[i], 1);
+            if (ok)
+                Volatile.Write(ref acked[i], 1);
             else
             {
                 Interlocked.Increment(ref failed);
                 Interlocked.Increment(ref _sendErrors);
             }
-            if (Interlocked.Decrement(ref pending) == 0) done.SetResult();
+            if (Interlocked.Decrement(ref pending) == 0)
+                done.SetResult();
         }
 
         for (var i = 0; i < rows.Count; i++)
@@ -114,8 +131,15 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
             };
             try
             {
-                producer.Produce(isAlarm ? TopicNames.Alarms : TopicNames.Readings, message,
-                    report => Report(index, !report.Error.IsError && report.Status == PersistenceStatus.Persisted));
+                producer.Produce(
+                    isAlarm ? TopicNames.Alarms : TopicNames.Readings,
+                    message,
+                    report =>
+                        Report(
+                            index,
+                            !report.Error.IsError && report.Status == PersistenceStatus.Persisted
+                        )
+                );
             }
             catch (ProduceException<string, byte[]>) // queue full or message too large: the row stays buffered
             {
@@ -135,7 +159,8 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
 
         var ids = new List<long>();
         for (var i = 0; i < rows.Count; i++)
-            if (Volatile.Read(ref acked[i]) == 1) ids.Add(rows[i].Id);
+            if (Volatile.Read(ref acked[i]) == 1)
+                ids.Add(rows[i].Id);
         if (ids.Count > 0)
         {
             await buffer.DeleteAsync(ids, CancellationToken.None); // acknowledged rows are deleted even during shutdown
@@ -153,7 +178,8 @@ public sealed class Sender(GatewayBuffer buffer, IProducer<string, byte[]> produ
     private void Prune()
     {
         var cutoff = time.GetUtcNow() - RateWindow;
-        while (_recent.TryPeek(out var r) && r.At < cutoff) _recent.Dequeue();
+        while (_recent.TryPeek(out var r) && r.At < cutoff)
+            _recent.Dequeue();
     }
 
     private void SetState(SenderState state) => Volatile.Write(ref _state, (int)state);

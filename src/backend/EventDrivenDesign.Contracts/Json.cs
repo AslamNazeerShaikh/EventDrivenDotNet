@@ -5,7 +5,8 @@ namespace EventDrivenDesign.Contracts;
 
 public static class Json
 {
-    public static JsonSerializerOptions Options { get; } = EventDrivenDesignJsonContext.Default.Options;
+    public static JsonSerializerOptions Options { get; } =
+        EventDrivenDesignJsonContext.Default.Options;
 }
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, UseStringEnumConverter = true)]

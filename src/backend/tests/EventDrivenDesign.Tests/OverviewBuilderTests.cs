@@ -13,17 +13,44 @@ public class OverviewBuilderTests
     private static readonly ProcessStats Proc = new(0, 0, 0);
     private static readonly string[] Shops = ["PRS", "BDY"];
 
-    private static GatewayMetrics Gw(string shop, bool paused = false, double rate = 100, long buffered = 0, params (string, long)[] seqs) =>
-        new($"gateway-{shop.ToLowerInvariant()}", shop, "Connected", paused, seqs.Length, seqs.Sum(s => s.Item2),
-            buffered, 0, 0, rate, 0, 0, seqs.ToDictionary(s => s.Item1, s => s.Item2), Proc);
+    private static GatewayMetrics Gw(
+        string shop,
+        bool paused = false,
+        double rate = 100,
+        long buffered = 0,
+        params (string, long)[] seqs
+    ) =>
+        new(
+            $"gateway-{shop.ToLowerInvariant()}",
+            shop,
+            "Connected",
+            paused,
+            seqs.Length,
+            seqs.Sum(s => s.Item2),
+            buffered,
+            0,
+            0,
+            rate,
+            0,
+            0,
+            seqs.ToDictionary(s => s.Item1, s => s.Item2),
+            Proc
+        );
 
-    private static ConsumerMetrics Cons(string id, double rate = 250) => new(id, [0], rate, rate, 0, 0, 0, 0, Proc);
+    private static ConsumerMetrics Cons(string id, double rate = 250) =>
+        new(id, [0], rate, rate, 0, 0, 0, 0, Proc);
 
     private static OffsetSample Offsets(long end, long committed) =>
         new(new Dictionary<int, long> { [0] = end }, new Dictionary<int, long> { [0] = committed });
 
     /// <summary>Every source seen at <paramref name="seen"/>, running, no lag.</summary>
-    private static Snapshot Fresh(DateTimeOffset seen, bool paused = false, long buffered = 0, long lag = 0, double mirrorLagSeconds = 0)
+    private static Snapshot Fresh(
+        DateTimeOffset seen,
+        bool paused = false,
+        long buffered = 0,
+        long lag = 0,
+        double mirrorLagSeconds = 0
+    )
     {
         var s = new Snapshot(Shops, ["consumer-1", "consumer-2"]);
         s.SetGateway("PRS", Gw("PRS", paused, 100, buffered, ("P1-PRS-S001", 10)), seen);
@@ -32,7 +59,10 @@ public class OverviewBuilderTests
         s.SetConsumer("consumer-2", Cons("consumer-2"), seen);
         s.SetPlantEnd(1000, seen);
         s.SetCentral(Offsets(1000, 1000 - lag), seen);
-        s.SetDb(new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15), seen);
+        s.SetDb(
+            new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15),
+            seen
+        );
         s.SeenPlant(Now);
         s.SeenCentral(Now - TimeSpan.FromSeconds(mirrorLagSeconds));
         return s;
@@ -43,7 +73,8 @@ public class OverviewBuilderTests
     {
         var s = Fresh(Now - TimeSpan.FromSeconds(30));
         // plant side and gateways are alive; database, central cluster and consumers were last seen 30 s ago
-        foreach (var shop in Shops) s.SetGateway(shop, Gw(shop), Now);
+        foreach (var shop in Shops)
+            s.SetGateway(shop, Gw(shop), Now);
         s.SetPlantEnd(1000, Now);
 
         var o = OverviewBuilder.Build(s, Now);
@@ -133,8 +164,14 @@ public class OverviewBuilderTests
     [Fact]
     public void Degraded_after_three_seconds_and_down_after_ten()
     {
-        OverviewBuilder.Build(Fresh(Now - TimeSpan.FromSeconds(5)), Now).Database.Health.Should().BeOfType<Degraded>();
-        OverviewBuilder.Build(Fresh(Now - TimeSpan.FromSeconds(11)), Now).Database.Health.Should().BeOfType<Down>();
+        OverviewBuilder
+            .Build(Fresh(Now - TimeSpan.FromSeconds(5)), Now)
+            .Database.Health.Should()
+            .BeOfType<Degraded>();
+        OverviewBuilder
+            .Build(Fresh(Now - TimeSpan.FromSeconds(11)), Now)
+            .Database.Health.Should()
+            .BeOfType<Down>();
     }
 
     // Gateways went quiet 5 s ago, so the 1 s old offsets are well past the settle time; every source answered just now.
@@ -144,7 +181,10 @@ public class OverviewBuilderTests
         s.SetGateway("PRS", Gw("PRS", true, 0, 0, ("P1-PRS-S001", 10)), Now);
         s.SetGateway("BDY", Gw("BDY", true, 0, 0, ("P1-BDY-W001", 5)), Now);
         s.SetCentral(Offsets(1000, 1000), Now);
-        s.SetDb(new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15), dbAt ?? Now);
+        s.SetDb(
+            new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15),
+            dbAt ?? Now
+        );
         s.SetPlantEnd(1000, Now);
         return s;
     }
@@ -179,13 +219,19 @@ public class OverviewBuilderTests
     [Fact]
     public void A_buffered_reading_waits_even_when_counts_match()
     {
-        OverviewBuilder.Reconcile(Fresh(Now, paused: true, buffered: 1), Now, null).Verdict.Should().Be("WAIT");
+        OverviewBuilder
+            .Reconcile(Fresh(Now, paused: true, buffered: 1), Now, null)
+            .Verdict.Should()
+            .Be("WAIT");
     }
 
     [Fact]
     public void Consumer_lag_waits()
     {
-        OverviewBuilder.Reconcile(Fresh(Now, paused: true, lag: 5), Now, null).Verdict.Should().Be("WAIT");
+        OverviewBuilder
+            .Reconcile(Fresh(Now, paused: true, lag: 5), Now, null)
+            .Verdict.Should()
+            .Be("WAIT");
     }
 
     [Fact]
@@ -200,14 +246,21 @@ public class OverviewBuilderTests
     public void A_stale_gateway_waits()
     {
         var s = Settled();
-        s.SetGateway("BDY", Gw("BDY", true, 0, 0, ("P1-BDY-W001", 5)), Now - TimeSpan.FromSeconds(20));
+        s.SetGateway(
+            "BDY",
+            Gw("BDY", true, 0, 0, ("P1-BDY-W001", 5)),
+            Now - TimeSpan.FromSeconds(20)
+        );
         OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("WAIT");
     }
 
     [Fact]
     public void A_database_that_is_down_waits()
     {
-        OverviewBuilder.Reconcile(Settled(dbAt: Now - TimeSpan.FromSeconds(30)), Now, null).Verdict.Should().Be("WAIT");
+        OverviewBuilder
+            .Reconcile(Settled(dbAt: Now - TimeSpan.FromSeconds(30)), Now, null)
+            .Verdict.Should()
+            .Be("WAIT");
     }
 
     [Fact]
@@ -252,7 +305,10 @@ public class OverviewBuilderTests
     public void Lost_readings_fail_once_paused_and_drained()
     {
         var s = Settled();
-        s.SetDb(new DbSample([new("P1-PRS-S001", 9, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 14, 12), Now);
+        s.SetDb(
+            new DbSample([new("P1-PRS-S001", 9, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 14, 12),
+            Now
+        );
         var r = OverviewBuilder.Reconcile(s, Now, null);
         r.Verdict.Should().Be("FAIL");
         r.Missing.Should().Be(1);
@@ -272,7 +328,10 @@ public class OverviewBuilderTests
         }
         s.SetPlantEnd(10, later);
         s.SetCentral(Offsets(10, 10), later);
-        s.SetDb(new DbSample([new("P1-PRS-X001", 1, 1, Now), new("P1-BDY-X001", 1, 1, Now)], 2, 2), later);
+        s.SetDb(
+            new DbSample([new("P1-PRS-X001", 1, 1, Now), new("P1-BDY-X001", 1, 1, Now)], 2, 2),
+            later
+        );
         OverviewBuilder.Reconcile(s, later, null).Verdict.Should().Be("PASS");
     }
 
@@ -281,7 +340,9 @@ public class OverviewBuilderTests
     {
         var w = Now;
         var chart = OverviewBuilder.BuildChart(
-            [(w - TimeSpan.FromSeconds(5), 7), (w, 8), (w + TimeSpan.FromSeconds(5), 9)], w);
+            [(w - TimeSpan.FromSeconds(5), 7), (w, 8), (w + TimeSpan.FromSeconds(5), 9)],
+            w
+        );
         chart.Watermark.Should().Be(w);
         chart.Points.Select(p => p.Provisional).Should().Equal(false, false, true);
         OverviewBuilder.BuildChart([(w, 1)], null).Points.Single().Provisional.Should().BeTrue();

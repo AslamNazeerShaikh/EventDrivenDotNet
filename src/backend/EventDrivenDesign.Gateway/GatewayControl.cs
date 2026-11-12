@@ -18,11 +18,18 @@ public sealed class GatewayControl(Collector collector, GatewayBuffer buffer)
                 await buffer.SetPausedAsync(false, ct);
                 return Result.Success();
             case InjectFault f:
-                return collector.InjectFault(f.MachineId, f.Kind)
-                    ? Result.Success()
+                return collector.InjectFault(f.MachineId, f.Kind) ? Result.Success()
                     : collector.LastSeqByMachine.ContainsKey(f.MachineId)
-                        ? new Error("gateway.fault.not_applicable", $"{f.Kind} does not apply to {f.MachineId}.", ErrorKind.Invalid)
-                        : new Error("gateway.machine.unknown", $"No machine {f.MachineId} on this gateway.", ErrorKind.NotFound);
+                        ? new Error(
+                            "gateway.fault.not_applicable",
+                            $"{f.Kind} does not apply to {f.MachineId}.",
+                            ErrorKind.Invalid
+                        )
+                    : new Error(
+                        "gateway.machine.unknown",
+                        $"No machine {f.MachineId} on this gateway.",
+                        ErrorKind.NotFound
+                    );
             case null:
                 throw new ArgumentNullException(nameof(command));
         }

@@ -8,7 +8,10 @@ namespace EventDrivenDesign.Api;
 public sealed record Stamped<T>(T Value, DateTimeOffset At);
 
 /// <summary>Per-partition latest offsets and the committed offsets of the writers' group.</summary>
-public sealed record OffsetSample(IReadOnlyDictionary<int, long> End, IReadOnlyDictionary<int, long> Committed)
+public sealed record OffsetSample(
+    IReadOnlyDictionary<int, long> End,
+    IReadOnlyDictionary<int, long> Committed
+)
 {
     public long Lag => End.Sum(e => Math.Max(0, e.Value - Committed.GetValueOrDefault(e.Key)));
 }
@@ -53,25 +56,38 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
     public DateTimeOffset? CentralNewest => Newest(ref _centralNewestTicks);
 
     /// <summary>When this gateway was first seen paused with nothing buffered, in its current such streak.</summary>
-    public DateTimeOffset? SettledSince(string shop) => _settledSince.TryGetValue(shop, out var t) ? t : null;
+    public DateTimeOffset? SettledSince(string shop) =>
+        _settledSince.TryGetValue(shop, out var t) ? t : null;
 
     public void SetGateway(string shop, GatewayMetrics m, DateTimeOffset at)
     {
         _gateways[shop] = new(m, at);
-        if (m.Paused && m.BufferedReadings + m.BufferedAlarms == 0) _settledSince.TryAdd(shop, at);
-        else _settledSince.TryRemove(shop, out _);
+        if (m.Paused && m.BufferedReadings + m.BufferedAlarms == 0)
+            _settledSince.TryAdd(shop, at);
+        else
+            _settledSince.TryRemove(shop, out _);
     }
 
-    public void SetConsumer(string id, ConsumerMetrics m, DateTimeOffset at) => _consumers[id] = new(m, at);
+    public void SetConsumer(string id, ConsumerMetrics m, DateTimeOffset at) =>
+        _consumers[id] = new(m, at);
 
-    public void SetPlantEnd(long total, DateTimeOffset at) => Volatile.Write(ref _plantEnd, new(total, at));
+    public void SetPlantEnd(long total, DateTimeOffset at) =>
+        Volatile.Write(ref _plantEnd, new(total, at));
 
     // One writer (the offsets loop). The run is written first: a reader that sees the new run with the old sample can only wait.
     public void SetCentral(OffsetSample sample, DateTimeOffset at)
     {
-        var same = _central?.Value is { } last && last.Lag == 0 && last.End.Count == sample.End.Count
+        var same =
+            _central?.Value is { } last
+            && last.Lag == 0
+            && last.End.Count == sample.End.Count
             && last.End.All(e => sample.End.TryGetValue(e.Key, out var v) && v == e.Value);
-        Volatile.Write(ref _centralStableTicks, sample.Lag != 0 ? 0 : same && _centralStableTicks != 0 ? _centralStableTicks : at.UtcTicks);
+        Volatile.Write(
+            ref _centralStableTicks,
+            sample.Lag != 0 ? 0
+                : same && _centralStableTicks != 0 ? _centralStableTicks
+                : at.UtcTicks
+        );
         Volatile.Write(ref _central, new(sample, at));
     }
 
@@ -81,7 +97,8 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
         var next = new Stamped<DbSample>(sample, startedAt);
         Stamped<DbSample>? seen;
         while ((seen = Volatile.Read(ref _db)) is null || seen.At <= startedAt)
-            if (Interlocked.CompareExchange(ref _db, next, seen) == seen) return;
+            if (Interlocked.CompareExchange(ref _db, next, seen) == seen)
+                return;
     }
 
     // The tails call these once per record: a lock-free monotonic max.
@@ -95,6 +112,9 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
     private static void Max(ref long slot, long value)
     {
         long seen;
-        while ((seen = Volatile.Read(ref slot)) < value && Interlocked.CompareExchange(ref slot, value, seen) != seen) { }
+        while (
+            (seen = Volatile.Read(ref slot)) < value
+            && Interlocked.CompareExchange(ref slot, value, seen) != seen
+        ) { }
     }
 }

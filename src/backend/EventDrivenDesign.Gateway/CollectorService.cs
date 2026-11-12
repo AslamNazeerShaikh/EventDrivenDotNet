@@ -10,20 +10,30 @@ namespace EventDrivenDesign.Gateway;
 /// (memory must never run ahead of the persisted sequence numbers).
 /// </summary>
 public sealed class CollectorService(
-    Collector collector, GatewayBuffer buffer, IReadOnlyList<MachineInfo> machines, double faultsPerMinute, TimeProvider time)
-    : BackgroundService
+    Collector collector,
+    GatewayBuffer buffer,
+    IReadOnlyList<MachineInfo> machines,
+    double faultsPerMinute,
+    TimeProvider time
+) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), time);
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
-            if (buffer.LoadPaused()) continue;
+            if (buffer.LoadPaused())
+                continue;
 
             if (Random.Shared.NextDouble() < faultsPerMinute / 60)
             {
                 var machine = machines[Random.Shared.Next(machines.Count)];
-                var kinds = Signals.For(machine.Type).Where(s => s.Kind is not null).Select(s => s.Kind!.Value).Distinct().ToArray();
+                var kinds = Signals
+                    .For(machine.Type)
+                    .Where(s => s.Kind is not null)
+                    .Select(s => s.Kind!.Value)
+                    .Distinct()
+                    .ToArray();
                 collector.InjectFault(machine.MachineId, kinds[Random.Shared.Next(kinds.Length)]);
             }
 

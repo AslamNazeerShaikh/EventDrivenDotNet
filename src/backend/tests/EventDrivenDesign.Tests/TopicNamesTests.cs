@@ -29,6 +29,9 @@ public sealed class TopicNamesTests
     [InlineData(TopicNames.CentralAlarmsPattern, "plant.machine.alarms", false)]
     [InlineData(TopicNames.CentralAlarmsPattern, "plant1.heartbeats", false)]
     [InlineData(TopicNames.CentralAlarmsPattern, "plant1.machine.readings", false)]
-    public void Pattern_matches_only_the_mirrored_topic(string pattern, string topic, bool expected) =>
-        Regex.IsMatch(topic, pattern, RegexOptions.ECMAScript).Should().Be(expected);
+    public void Pattern_matches_only_the_mirrored_topic(
+        string pattern,
+        string topic,
+        bool expected
+    ) => Regex.IsMatch(topic, pattern, RegexOptions.ECMAScript).Should().Be(expected);
 }

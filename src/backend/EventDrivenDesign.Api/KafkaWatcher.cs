@@ -8,7 +8,13 @@ namespace EventDrivenDesign.Api;
 /// Watches one topic on one cluster: end offsets (and a group's committed offsets) on demand, and a tail consumer
 /// that reports the timestamp of every record it sees. The tail never commits and never joins a group's work.
 /// </summary>
-public sealed class KafkaWatcher(string bootstrap, string topic, string? group, Action<DateTimeOffset> seen, ILogger log) : IDisposable
+public sealed class KafkaWatcher(
+    string bootstrap,
+    string topic,
+    string? group,
+    Action<DateTimeOffset> seen,
+    ILogger log
+) : IDisposable
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
     private IAdminClient? _admin;
@@ -35,21 +41,37 @@ public sealed class KafkaWatcher(string bootstrap, string topic, string? group, 
     private async Task<OffsetSample> PollAsync(IAdminClient admin)
     {
         var partitions = Partitions(admin, topic);
-        if (partitions.Count == 0) return new OffsetSample(new Dictionary<int, long>(), new Dictionary<int, long>());
+        if (partitions.Count == 0)
+            return new OffsetSample(new Dictionary<int, long>(), new Dictionary<int, long>());
 
         var latest = await admin.ListOffsetsAsync(
-            partitions.Select(p => new TopicPartitionOffsetSpec { TopicPartition = new TopicPartition(topic, p), OffsetSpec = OffsetSpec.Latest() }),
-            new ListOffsetsOptions { RequestTimeout = Timeout });
-        var end = latest.ResultInfos.ToDictionary(r => r.TopicPartitionOffsetError.Partition.Value, r => r.TopicPartitionOffsetError.Offset.Value);
+            partitions.Select(p => new TopicPartitionOffsetSpec
+            {
+                TopicPartition = new TopicPartition(topic, p),
+                OffsetSpec = OffsetSpec.Latest(),
+            }),
+            new ListOffsetsOptions { RequestTimeout = Timeout }
+        );
+        var end = latest.ResultInfos.ToDictionary(
+            r => r.TopicPartitionOffsetError.Partition.Value,
+            r => r.TopicPartitionOffsetError.Offset.Value
+        );
 
         var committed = new Dictionary<int, long>();
         if (group is not null)
         {
             var groups = await admin.ListConsumerGroupOffsetsAsync(
-                [new ConsumerGroupTopicPartitions(group, [.. partitions.Select(p => new TopicPartition(topic, p))])],
-                new ListConsumerGroupOffsetsOptions { RequestTimeout = Timeout });
+                [
+                    new ConsumerGroupTopicPartitions(
+                        group,
+                        [.. partitions.Select(p => new TopicPartition(topic, p))]
+                    ),
+                ],
+                new ListConsumerGroupOffsetsOptions { RequestTimeout = Timeout }
+            );
             foreach (var tpo in groups.SelectMany(g => g.Partitions))
-                if (tpo.Offset.Value >= 0) committed[tpo.Partition.Value] = tpo.Offset.Value; // Unset: nothing committed yet
+                if (tpo.Offset.Value >= 0)
+                    committed[tpo.Partition.Value] = tpo.Offset.Value; // Unset: nothing committed yet
         }
         return new OffsetSample(end, committed);
     }
@@ -62,7 +84,9 @@ public sealed class KafkaWatcher(string bootstrap, string topic, string? group, 
         {
             try
             {
-                using var consumer = new ConsumerBuilder<Ignore, Ignore>(KafkaConfigs.Tail(bootstrap)).Build();
+                using var consumer = new ConsumerBuilder<Ignore, Ignore>(
+                    KafkaConfigs.Tail(bootstrap)
+                ).Build();
                 using var admin = new AdminClientBuilder(KafkaConfigs.Admin(bootstrap)).Build(); // the tail's own, for partition discovery
                 HashSet<int> assigned = [];
                 var nextLook = DateTime.MinValue;
@@ -73,23 +97,33 @@ public sealed class KafkaWatcher(string bootstrap, string topic, string? group, 
                         nextLook = DateTime.UtcNow.AddSeconds(5);
                         try
                         {
-                            var added = Partitions(admin, topic).Where(p => !assigned.Contains(p)).ToList();
+                            var added = Partitions(admin, topic)
+                                .Where(p => !assigned.Contains(p))
+                                .ToList();
                             if (added.Count > 0)
                             {
                                 var position = firstLook ? Offset.End : Offset.Beginning;
-                                consumer.IncrementalAssign(added.Select(p => new TopicPartitionOffset(topic, p, position)));
+                                consumer.IncrementalAssign(
+                                    added.Select(p => new TopicPartitionOffset(topic, p, position))
+                                );
                                 assigned.UnionWith(added);
                             }
                             firstLook = false;
                         }
                         catch (KafkaException e)
                         {
-                            log.LogWarning("Tail of {Topic} cannot reach {Bootstrap}: {Reason}", topic, bootstrap, e.Error.Reason);
+                            log.LogWarning(
+                                "Tail of {Topic} cannot reach {Bootstrap}: {Reason}",
+                                topic,
+                                bootstrap,
+                                e.Error.Reason
+                            );
                         }
                     }
 
                     var result = consumer.Consume(TimeSpan.FromMilliseconds(500));
-                    if (result?.Message is { Timestamp.Type: not TimestampType.NotAvailable } m) seen(m.Timestamp.UtcDateTime);
+                    if (result?.Message is { Timestamp.Type: not TimestampType.NotAvailable } m)
+                        seen(m.Timestamp.UtcDateTime);
                 }
             }
             catch (Exception e) when (e is not OperationCanceledException)
@@ -105,7 +139,8 @@ public sealed class KafkaWatcher(string bootstrap, string topic, string? group, 
     private static List<int> Partitions(IAdminClient admin, string topic)
     {
         var meta = admin.GetMetadata(topic, Timeout).Topics.Single();
-        return meta.Error.Code == ErrorCode.UnknownTopicOrPart ? [] : meta.Error.IsError
-            ? throw new KafkaException(meta.Error) : [.. meta.Partitions.Select(p => p.PartitionId)];
+        return meta.Error.Code == ErrorCode.UnknownTopicOrPart ? []
+            : meta.Error.IsError ? throw new KafkaException(meta.Error)
+            : [.. meta.Partitions.Select(p => p.PartitionId)];
     }
 }

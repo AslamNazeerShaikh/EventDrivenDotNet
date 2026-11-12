@@ -2,7 +2,12 @@ using System.Text;
 
 namespace EventDrivenDesign.Shared;
 
-public enum ErrorKind { Invalid, NotFound, Unavailable }
+public enum ErrorKind
+{
+    Invalid,
+    NotFound,
+    Unavailable,
+}
 
 public sealed record Error(string Code, string Message, ErrorKind Kind = ErrorKind.Invalid);
 
@@ -27,7 +32,8 @@ public readonly record struct Result<T>
 
     public bool IsSuccess => Error is null;
 
-    public T Value => IsSuccess ? _value! : throw new InvalidOperationException($"Result failed: {Error!.Code}.");
+    public T Value =>
+        IsSuccess ? _value! : throw new InvalidOperationException($"Result failed: {Error!.Code}.");
 
     // The synthesised PrintMembers would read Value, which throws on a failure.
     private bool PrintMembers(StringBuilder builder)
@@ -40,7 +46,8 @@ public readonly record struct Result<T>
 
     public static Result<T> Failure(Error error) => new() { Error = error };
 
-    public TOut Match<TOut>(Func<T, TOut> ok, Func<Error, TOut> fail) => IsSuccess ? ok(_value!) : fail(Error!);
+    public TOut Match<TOut>(Func<T, TOut> ok, Func<Error, TOut> fail) =>
+        IsSuccess ? ok(_value!) : fail(Error!);
 
     public static implicit operator Result<T>(T value) => Success(value);
 

@@ -9,7 +9,9 @@ namespace EventDrivenDesign.IntegrationTests;
 
 public sealed class CentralQueriesTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder("postgres:18.6-alpine").Build();
+    private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder(
+        "postgres:18.6-alpine"
+    ).Build();
     private NpgsqlDataSource _db = null!;
     private CentralStore _store = null!;
     private CentralQueries _queries = null!;
@@ -18,7 +20,9 @@ public sealed class CentralQueriesTests : IAsyncLifetime
     {
         await _pg.StartAsync(TestContext.Current.CancellationToken);
         _db = NpgsqlDataSource.Create(_pg.GetConnectionString());
-        await using var cmd = _db.CreateCommand(await File.ReadAllTextAsync("01-schema.sql", TestContext.Current.CancellationToken));
+        await using var cmd = _db.CreateCommand(
+            await File.ReadAllTextAsync("01-schema.sql", TestContext.Current.CancellationToken)
+        );
         await cmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         _store = new CentralStore(_db);
         _queries = new CentralQueries(_db);
@@ -31,7 +35,14 @@ public sealed class CentralQueriesTests : IAsyncLifetime
     }
 
     private static MachineReading Reading(string machine, long seq, DateTimeOffset at) =>
-        new(machine, "press", "shop-1", seq, at, new Dictionary<string, double> { ["temp_c"] = 20.5 });
+        new(
+            machine,
+            "press",
+            "shop-1",
+            seq,
+            at,
+            new Dictionary<string, double> { ["temp_c"] = 20.5 }
+        );
 
     [Fact]
     public async Task Chart_buckets_by_device_time()
@@ -43,19 +54,27 @@ public sealed class CentralQueriesTests : IAsyncLifetime
         // 5 readings in window 1, 4 in window 2, 3 in window 3
         int[] offsets = [0, 0, 1, 2, 4, 5, 6, 7, 9, 10, 12, 14];
         await _store.InsertReadingsAsync(
-            [.. offsets.Select((o, i) => Reading("m1", i + 1, start.AddSeconds(o)))], [], "w1", ct);
+            [.. offsets.Select((o, i) => Reading("m1", i + 1, start.AddSeconds(o)))],
+            [],
+            "w1",
+            ct
+        );
 
         var chart = await _queries.ChartAsync(10, ct);
 
-        chart.Should().Equal(
-            (start, 5L), (start.AddSeconds(5), 4L), (start.AddSeconds(10), 3L));
+        chart.Should().Equal((start, 5L), (start.AddSeconds(5), 4L), (start.AddSeconds(10), 3L));
     }
 
     [Fact]
     public async Task Chart_ignores_readings_older_than_the_window()
     {
         var ct = TestContext.Current.CancellationToken;
-        await _store.InsertReadingsAsync([Reading("m1", 1, DateTimeOffset.UtcNow.AddMinutes(-30))], [], "w1", ct);
+        await _store.InsertReadingsAsync(
+            [Reading("m1", 1, DateTimeOffset.UtcNow.AddMinutes(-30))],
+            [],
+            "w1",
+            ct
+        );
         (await _queries.ChartAsync(10, ct)).Should().BeEmpty();
     }
 
@@ -65,7 +84,13 @@ public sealed class CentralQueriesTests : IAsyncLifetime
         var ct = TestContext.Current.CancellationToken;
         var t0 = DateTimeOffset.UtcNow;
         List<MachineReading> hundred =
-            [.. Enumerable.Range(1, 10).SelectMany(m => Enumerable.Range(1, 10).Select(s => Reading($"m{m}", s, t0.AddSeconds(s))))];
+        [
+            .. Enumerable
+                .Range(1, 10)
+                .SelectMany(m =>
+                    Enumerable.Range(1, 10).Select(s => Reading($"m{m}", s, t0.AddSeconds(s)))
+                ),
+        ];
         await _store.InsertReadingsAsync(hundred, [], "w1", ct);
         await _store.InsertReadingsAsync(hundred, [], "w1", ct);
 
@@ -83,13 +108,26 @@ public sealed class CentralQueriesTests : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
         var t0 = DateTimeOffset.UtcNow.AddSeconds(-30);
-        await _store.InsertAlarmsAsync([new("m1", 1, 5, t0, AlarmKind.Overheat, "critical", "temp_c", 99, 90)], [], "w1", ct);
+        await _store.InsertAlarmsAsync(
+            [new("m1", 1, 5, t0, AlarmKind.Overheat, "critical", "temp_c", 99, 90)],
+            [],
+            "w1",
+            ct
+        );
         await Task.Delay(50, ct);
-        await _store.InsertAlarmsAsync([new("m2", 1, 5, t0, AlarmKind.EStop, "critical", null, null, null)], [], "w1", ct);
+        await _store.InsertAlarmsAsync(
+            [new("m2", 1, 5, t0, AlarmKind.EStop, "critical", null, null, null)],
+            [],
+            "w1",
+            ct
+        );
 
         var alarms = await _queries.RecentAlarmsAsync(50, ct);
 
-        alarms.Select(a => (a.MachineId, a.Kind)).Should().Equal(("m2", AlarmKind.EStop), ("m1", AlarmKind.Overheat));
+        alarms
+            .Select(a => (a.MachineId, a.Kind))
+            .Should()
+            .Equal(("m2", AlarmKind.EStop), ("m1", AlarmKind.Overheat));
         alarms.Should().OnlyContain(a => a.LatencySeconds >= 29 && a.LatencySeconds < 40);
         (await _queries.RecentAlarmsAsync(1, ct)).Should().ContainSingle();
     }
@@ -99,7 +137,12 @@ public sealed class CentralQueriesTests : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
         var ahead = DateTimeOffset.UtcNow.AddSeconds(5);
-        await _store.InsertAlarmsAsync([new("m1", 1, 5, ahead, AlarmKind.Overheat, "critical", "temp_c", 99, 90)], [], "w1", ct);
+        await _store.InsertAlarmsAsync(
+            [new("m1", 1, 5, ahead, AlarmKind.Overheat, "critical", "temp_c", 99, 90)],
+            [],
+            "w1",
+            ct
+        );
 
         var alarms = await _queries.RecentAlarmsAsync(50, ct);
 

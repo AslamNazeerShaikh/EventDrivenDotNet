@@ -3,15 +3,36 @@ using Microsoft.Data.Sqlite;
 
 namespace EventDrivenDesign.Persistence;
 
-public enum Lane { Alarm = 0, Reading = 1 }
+public enum Lane
+{
+    Alarm = 0,
+    Reading = 1,
+}
 
-public sealed record OutboxRow(long Id, Lane Lane, string MachineId, long Seq, long DeviceTimeMs, byte[] Payload);
+public sealed record OutboxRow(
+    long Id,
+    Lane Lane,
+    string MachineId,
+    long Seq,
+    long DeviceTimeMs,
+    byte[] Payload
+);
 
-public sealed record MachineState(string MachineId, long LastSeq, long LastAlarmSeq, long LastDeviceTimeMs);
+public sealed record MachineState(
+    string MachineId,
+    long LastSeq,
+    long LastAlarmSeq,
+    long LastDeviceTimeMs
+);
 
 public sealed record TickBatch(IReadOnlyList<OutboxRow> Rows, IReadOnlyList<MachineState> States);
 
-public sealed record BufferStats(long Readings, long Alarms, long? OldestDeviceTimeMs, long FileBytes);
+public sealed record BufferStats(
+    long Readings,
+    long Alarms,
+    long? OldestDeviceTimeMs,
+    long FileBytes
+);
 
 /// <summary>
 /// SQLite store-and-forward buffer (doc 02 §4.2). One dedicated thread owns the only write connection;
@@ -46,11 +67,15 @@ public sealed class GatewayBuffer : IAsyncDisposable
     private readonly string _path;
     private readonly string _connectionString;
     private readonly SqliteConnection _writer;
-    private readonly Channel<WriteOp> _queue =
-        Channel.CreateBounded<WriteOp>(new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait });
+    private readonly Channel<WriteOp> _queue = Channel.CreateBounded<WriteOp>(
+        new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait }
+    );
     private readonly Thread _thread;
-    private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _stopped = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
     private int _disposed;
+
     // Exact row counts per lane: seeded once at open, then changed only by the writer thread after a commit,
     // so Stats() never scans the table. Index 0 = alarms, 1 = readings.
     private readonly long[] _counts = new long[2];
@@ -83,98 +108,118 @@ public sealed class GatewayBuffer : IAsyncDisposable
     {
         using var conn = OpenReader();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT machine_id, last_seq, last_alarm_seq, last_device_time_ms FROM machine_state";
+        cmd.CommandText =
+            "SELECT machine_id, last_seq, last_alarm_seq, last_device_time_ms FROM machine_state";
         using var r = cmd.ExecuteReader();
         var result = new Dictionary<string, MachineState>();
         while (r.Read())
-            result[r.GetString(0)] = new MachineState(r.GetString(0), r.GetInt64(1), r.GetInt64(2), r.GetInt64(3));
+            result[r.GetString(0)] = new MachineState(
+                r.GetString(0),
+                r.GetInt64(1),
+                r.GetInt64(2),
+                r.GetInt64(3)
+            );
         return result;
     }
 
     public bool LoadPaused() => Scalar<long?>("SELECT paused FROM gateway_state WHERE id = 1") == 1;
 
-    public Task WriteTickAsync(TickBatch tick, CancellationToken ct) => Submit(conn =>
-    {
-        using var tx = conn.BeginTransaction();
-        using var insert = conn.CreateCommand();
-        insert.Transaction = tx;
-        insert.CommandText =
-            "INSERT INTO outbox (lane, machine_id, seq, device_time_ms, payload) VALUES ($l, $m, $s, $t, $p)";
-        var l = insert.Parameters.Add("$l", SqliteType.Integer);
-        var m = insert.Parameters.Add("$m", SqliteType.Text);
-        var s = insert.Parameters.Add("$s", SqliteType.Integer);
-        var t = insert.Parameters.Add("$t", SqliteType.Integer);
-        var p = insert.Parameters.Add("$p", SqliteType.Blob);
-        foreach (var row in tick.Rows)
-        {
-            l.Value = (long)row.Lane;
-            m.Value = row.MachineId;
-            s.Value = row.Seq;
-            t.Value = row.DeviceTimeMs;
-            p.Value = row.Payload;
-            insert.ExecuteNonQuery();
-        }
-
-        using var upsert = conn.CreateCommand();
-        upsert.Transaction = tx;
-        upsert.CommandText = """
-            INSERT INTO machine_state (machine_id, last_seq, last_alarm_seq, last_device_time_ms)
-            VALUES ($m, $s, $a, $t)
-            ON CONFLICT (machine_id) DO UPDATE SET
-              last_seq = excluded.last_seq,
-              last_alarm_seq = excluded.last_alarm_seq,
-              last_device_time_ms = excluded.last_device_time_ms
-            """;
-        var um = upsert.Parameters.Add("$m", SqliteType.Text);
-        var us = upsert.Parameters.Add("$s", SqliteType.Integer);
-        var ua = upsert.Parameters.Add("$a", SqliteType.Integer);
-        var ut = upsert.Parameters.Add("$t", SqliteType.Integer);
-        foreach (var state in tick.States)
-        {
-            um.Value = state.MachineId;
-            us.Value = state.LastSeq;
-            ua.Value = state.LastAlarmSeq;
-            ut.Value = state.LastDeviceTimeMs;
-            upsert.ExecuteNonQuery();
-        }
-
-        tx.Commit();
-        foreach (var row in tick.Rows) Interlocked.Increment(ref _counts[(int)row.Lane]);
-    }, ct);
-
-    public Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken ct) => Submit(conn =>
-    {
-        using (var tx = conn.BeginTransaction())
-        {
-            using var delete = conn.CreateCommand();
-            delete.Transaction = tx;
-            delete.CommandText = "DELETE FROM outbox WHERE id = $id RETURNING lane";
-            var id = delete.Parameters.Add("$id", SqliteType.Integer);
-            var removed = new long[2];
-            foreach (var value in ids)
+    public Task WriteTickAsync(TickBatch tick, CancellationToken ct) =>
+        Submit(
+            conn =>
             {
-                id.Value = value;
-                if (delete.ExecuteScalar() is long lane) removed[lane]++; // a missing id returns no row
-            }
+                using var tx = conn.BeginTransaction();
+                using var insert = conn.CreateCommand();
+                insert.Transaction = tx;
+                insert.CommandText =
+                    "INSERT INTO outbox (lane, machine_id, seq, device_time_ms, payload) VALUES ($l, $m, $s, $t, $p)";
+                var l = insert.Parameters.Add("$l", SqliteType.Integer);
+                var m = insert.Parameters.Add("$m", SqliteType.Text);
+                var s = insert.Parameters.Add("$s", SqliteType.Integer);
+                var t = insert.Parameters.Add("$t", SqliteType.Integer);
+                var p = insert.Parameters.Add("$p", SqliteType.Blob);
+                foreach (var row in tick.Rows)
+                {
+                    l.Value = (long)row.Lane;
+                    m.Value = row.MachineId;
+                    s.Value = row.Seq;
+                    t.Value = row.DeviceTimeMs;
+                    p.Value = row.Payload;
+                    insert.ExecuteNonQuery();
+                }
 
-            tx.Commit();
-            Interlocked.Add(ref _counts[0], -removed[0]);
-            Interlocked.Add(ref _counts[1], -removed[1]);
-        }
+                using var upsert = conn.CreateCommand();
+                upsert.Transaction = tx;
+                upsert.CommandText = """
+                    INSERT INTO machine_state (machine_id, last_seq, last_alarm_seq, last_device_time_ms)
+                    VALUES ($m, $s, $a, $t)
+                    ON CONFLICT (machine_id) DO UPDATE SET
+                      last_seq = excluded.last_seq,
+                      last_alarm_seq = excluded.last_alarm_seq,
+                      last_device_time_ms = excluded.last_device_time_ms
+                    """;
+                var um = upsert.Parameters.Add("$m", SqliteType.Text);
+                var us = upsert.Parameters.Add("$s", SqliteType.Integer);
+                var ua = upsert.Parameters.Add("$a", SqliteType.Integer);
+                var ut = upsert.Parameters.Add("$t", SqliteType.Integer);
+                foreach (var state in tick.States)
+                {
+                    um.Value = state.MachineId;
+                    us.Value = state.LastSeq;
+                    ua.Value = state.LastAlarmSeq;
+                    ut.Value = state.LastDeviceTimeMs;
+                    upsert.ExecuteNonQuery();
+                }
 
-        Exec(conn, "PRAGMA incremental_vacuum(256)");
-    }, ct);
+                tx.Commit();
+                foreach (var row in tick.Rows)
+                    Interlocked.Increment(ref _counts[(int)row.Lane]);
+            },
+            ct
+        );
 
-    public Task SetPausedAsync(bool paused, CancellationToken ct) => Submit(conn =>
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO gateway_state (id, paused) VALUES (1, $p)
-            ON CONFLICT (id) DO UPDATE SET paused = excluded.paused
-            """;
-        cmd.Parameters.AddWithValue("$p", paused ? 1L : 0L);
-        cmd.ExecuteNonQuery();
-    }, ct);
+    public Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken ct) =>
+        Submit(
+            conn =>
+            {
+                using (var tx = conn.BeginTransaction())
+                {
+                    using var delete = conn.CreateCommand();
+                    delete.Transaction = tx;
+                    delete.CommandText = "DELETE FROM outbox WHERE id = $id RETURNING lane";
+                    var id = delete.Parameters.Add("$id", SqliteType.Integer);
+                    var removed = new long[2];
+                    foreach (var value in ids)
+                    {
+                        id.Value = value;
+                        if (delete.ExecuteScalar() is long lane)
+                            removed[lane]++; // a missing id returns no row
+                    }
+
+                    tx.Commit();
+                    Interlocked.Add(ref _counts[0], -removed[0]);
+                    Interlocked.Add(ref _counts[1], -removed[1]);
+                }
+
+                Exec(conn, "PRAGMA incremental_vacuum(256)");
+            },
+            ct
+        );
+
+    public Task SetPausedAsync(bool paused, CancellationToken ct) =>
+        Submit(
+            conn =>
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    INSERT INTO gateway_state (id, paused) VALUES (1, $p)
+                    ON CONFLICT (id) DO UPDATE SET paused = excluded.paused
+                    """;
+                cmd.Parameters.AddWithValue("$p", paused ? 1L : 0L);
+                cmd.ExecuteNonQuery();
+            },
+            ct
+        );
 
     public IReadOnlyList<OutboxRow> ReadOldest(int limit)
     {
@@ -186,8 +231,16 @@ public sealed class GatewayBuffer : IAsyncDisposable
         using var r = cmd.ExecuteReader();
         var rows = new List<OutboxRow>();
         while (r.Read())
-            rows.Add(new OutboxRow(r.GetInt64(0), (Lane)r.GetInt64(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4),
-                (byte[])r[5]));
+            rows.Add(
+                new OutboxRow(
+                    r.GetInt64(0),
+                    (Lane)r.GetInt64(1),
+                    r.GetString(2),
+                    r.GetInt64(3),
+                    r.GetInt64(4),
+                    (byte[])r[5]
+                )
+            );
         return rows;
     }
 
@@ -195,15 +248,24 @@ public sealed class GatewayBuffer : IAsyncDisposable
     {
         // Oldest = the lower of each lane's first row: an indexed (lane, id) lookup, ids grow with insertion.
         var oldest = new[] { Lane.Alarm, Lane.Reading }
-            .Select(lane => Scalar<long?>($"SELECT device_time_ms FROM outbox WHERE lane = {(int)lane} ORDER BY id LIMIT 1"))
+            .Select(lane =>
+                Scalar<long?>(
+                    $"SELECT device_time_ms FROM outbox WHERE lane = {(int)lane} ORDER BY id LIMIT 1"
+                )
+            )
             .Min();
-        return new BufferStats(Volatile.Read(ref _counts[(int)Lane.Reading]), Volatile.Read(ref _counts[(int)Lane.Alarm]),
-            oldest, FileLength(_path) + FileLength(_path + "-wal"));
+        return new BufferStats(
+            Volatile.Read(ref _counts[(int)Lane.Reading]),
+            Volatile.Read(ref _counts[(int)Lane.Alarm]),
+            oldest,
+            FileLength(_path) + FileLength(_path + "-wal")
+        );
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            return;
         _queue.Writer.Complete();
         await _stopped.Task; // the writer drains queued operations before it exits
         _writer.Dispose();
@@ -213,18 +275,24 @@ public sealed class GatewayBuffer : IAsyncDisposable
     internal async Task<long> ReadWriterSynchronousAsync()
     {
         long value = 0;
-        await Submit(conn =>
-        {
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA synchronous";
-            value = Convert.ToInt64(cmd.ExecuteScalar());
-        }, CancellationToken.None);
+        await Submit(
+            conn =>
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "PRAGMA synchronous";
+                value = Convert.ToInt64(cmd.ExecuteScalar());
+            },
+            CancellationToken.None
+        );
         return value;
     }
 
     private Task Submit(Action<SqliteConnection> run, CancellationToken ct)
     {
-        var op = new WriteOp(run, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        var op = new WriteOp(
+            run,
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        );
         return Enqueue(op, ct);
     }
 
@@ -273,7 +341,9 @@ public sealed class GatewayBuffer : IAsyncDisposable
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         var value = cmd.ExecuteScalar();
-        return value is null or DBNull ? default! : (T)Convert.ChangeType(value, Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T));
+        return value is null or DBNull
+            ? default!
+            : (T)Convert.ChangeType(value, Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T));
     }
 
     private static void Exec(SqliteConnection conn, string sql)
@@ -283,5 +353,6 @@ public sealed class GatewayBuffer : IAsyncDisposable
         cmd.ExecuteNonQuery();
     }
 
-    private static long FileLength(string path) => File.Exists(path) ? new FileInfo(path).Length : 0;
+    private static long FileLength(string path) =>
+        File.Exists(path) ? new FileInfo(path).Length : 0;
 }

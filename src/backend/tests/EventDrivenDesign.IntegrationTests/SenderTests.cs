@@ -20,11 +20,22 @@ public sealed class SenderTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _kafka.StartAsync(TestContext.Current.CancellationToken);
-        using var admin = new AdminClientBuilder(KafkaConfigs.Admin(_kafka.GetBootstrapAddress())).Build();
-        await admin.CreateTopicsAsync(
-        [
-            new TopicSpecification { Name = TopicNames.Readings, NumPartitions = 12, ReplicationFactor = 1 },
-            new TopicSpecification { Name = TopicNames.Alarms, NumPartitions = 3, ReplicationFactor = 1 },
+        using var admin = new AdminClientBuilder(
+            KafkaConfigs.Admin(_kafka.GetBootstrapAddress())
+        ).Build();
+        await admin.CreateTopicsAsync([
+            new TopicSpecification
+            {
+                Name = TopicNames.Readings,
+                NumPartitions = 12,
+                ReplicationFactor = 1,
+            },
+            new TopicSpecification
+            {
+                Name = TopicNames.Alarms,
+                NumPartitions = 3,
+                ReplicationFactor = 1,
+            },
         ]);
     }
 
@@ -43,12 +54,18 @@ public sealed class SenderTests : IAsyncLifetime
         var now = DateTimeOffset.UtcNow;
         for (var i = 0; i < 3; i++)
         {
-            if (i == 2) collector.InjectFault("P1-BDY-W042", AlarmKind.Overheat).Should().BeTrue();
-            await buffer.WriteTickAsync(collector.Tick(now.AddSeconds(i)), TestContext.Current.CancellationToken);
+            if (i == 2)
+                collector.InjectFault("P1-BDY-W042", AlarmKind.Overheat).Should().BeTrue();
+            await buffer.WriteTickAsync(
+                collector.Tick(now.AddSeconds(i)),
+                TestContext.Current.CancellationToken
+            );
         }
         buffer.Stats().Should().Match<BufferStats>(s => s.Readings == 300 && s.Alarms == 1);
 
-        using var producer = new ProducerBuilder<string, byte[]>(KafkaConfigs.Producer(bootstrap)).Build();
+        using var producer = new ProducerBuilder<string, byte[]>(
+            KafkaConfigs.Producer(bootstrap)
+        ).Build();
         var sender = new Sender(buffer, producer, "BDY", TimeProvider.System);
         using var cts = new CancellationTokenSource();
 
@@ -57,7 +74,9 @@ public sealed class SenderTests : IAsyncLifetime
         var run = sender.RunAsync(cts.Token);
         await Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         var buffered = buffer.Stats();
-        (buffered.Readings + buffered.Alarms).Should().Be(301, "nothing is acknowledged while the broker is paused");
+        (buffered.Readings + buffered.Alarms)
+            .Should()
+            .Be(301, "nothing is acknowledged while the broker is paused");
         sender.Sent.Should().Be(0);
 
         await _kafka.UnpauseAsync(TestContext.Current.CancellationToken);
@@ -82,17 +101,22 @@ public sealed class SenderTests : IAsyncLifetime
         config.AutoOffsetReset = AutoOffsetReset.Earliest;
         using var consumer = new ConsumerBuilder<string, byte[]>(config).Build();
         consumer.Subscribe([TopicNames.Readings, TopicNames.Alarms]);
-        List<Received> readings = [], alarms = [];
+        List<Received> readings = [],
+            alarms = [];
         // Stop once the topics have been quiet for 5 s, so a duplicate would still be seen.
         var quietSince = DateTime.UtcNow;
         var hardStop = DateTime.UtcNow.AddSeconds(60);
         while (DateTime.UtcNow < hardStop && DateTime.UtcNow - quietSince < TimeSpan.FromSeconds(5))
         {
             var result = consumer.Consume(TimeSpan.FromMilliseconds(500));
-            if (result is null) continue;
+            if (result is null)
+                continue;
             quietSince = DateTime.UtcNow;
-            var received = new Received(result.Message.Key,
-                Encoding.UTF8.GetString(result.Message.Headers.GetLastBytes("ce_id")), result.Message.Timestamp.UnixTimestampMs);
+            var received = new Received(
+                result.Message.Key,
+                Encoding.UTF8.GetString(result.Message.Headers.GetLastBytes("ce_id")),
+                result.Message.Timestamp.UnixTimestampMs
+            );
             (result.Topic == TopicNames.Readings ? readings : alarms).Add(received);
         }
         return (readings, alarms);

@@ -5,7 +5,13 @@ using NpgsqlTypes;
 
 namespace EventDrivenDesign.Persistence;
 
-public sealed record RejectedRecord(string Topic, int Partition, long Offset, byte[] Raw, string Error);
+public sealed record RejectedRecord(
+    string Topic,
+    int Partition,
+    long Offset,
+    byte[] Raw,
+    string Error
+);
 
 /// <summary>
 /// The one deduplication point (doc 02 §4.6): the (machine_id, seq) key with ON CONFLICT DO NOTHING.
@@ -63,9 +69,14 @@ public sealed class CentralStore(NpgsqlDataSource db)
 
     /// <summary>Returns rows inserted. An empty batch with nothing rejected is a no-op (counters stay untouched).</summary>
     public async Task<int> InsertReadingsAsync(
-        IReadOnlyList<MachineReading> batch, IReadOnlyList<RejectedRecord> rejected, string writerId, CancellationToken ct)
+        IReadOnlyList<MachineReading> batch,
+        IReadOnlyList<RejectedRecord> rejected,
+        string writerId,
+        CancellationToken ct
+    )
     {
-        if (batch.Count == 0 && rejected.Count == 0) return 0;
+        if (batch.Count == 0 && rejected.Count == 0)
+            return 0;
 
         await using var conn = await db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -73,12 +84,48 @@ public sealed class CentralStore(NpgsqlDataSource db)
         if (batch.Count > 0)
         {
             await using var cmd = new NpgsqlCommand(InsertReadings, conn, tx);
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("machine_ids", [.. batch.Select(r => r.MachineId)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<long[]>("seqs", [.. batch.Select(r => r.Seq)]) { NpgsqlDbType = (NpgsqlDbType)BigintArray });
-            cmd.Parameters.Add(new NpgsqlParameter<DateTime[]>("device_times", [.. batch.Select(r => r.DeviceTime.UtcDateTime)]) { NpgsqlDbType = (NpgsqlDbType)TimestampTzArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("types", [.. batch.Select(r => r.MachineType)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("shops", [.. batch.Select(r => r.Shop)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("signals", [.. batch.Select(r => JsonSerializer.Serialize(r.Signals, Json.Options))]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("machine_ids", [.. batch.Select(r => r.MachineId)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<long[]>("seqs", [.. batch.Select(r => r.Seq)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)BigintArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<DateTime[]>(
+                    "device_times",
+                    [.. batch.Select(r => r.DeviceTime.UtcDateTime)]
+                )
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TimestampTzArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("types", [.. batch.Select(r => r.MachineType)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("shops", [.. batch.Select(r => r.Shop)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>(
+                    "signals",
+                    [.. batch.Select(r => JsonSerializer.Serialize(r.Signals, Json.Options))]
+                )
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
             inserted = (int)(long)(await cmd.ExecuteScalarAsync(ct))!;
         }
         await AddTotalsAsync(conn, tx, "readings", writerId, batch.Count, inserted, ct);
@@ -89,9 +136,14 @@ public sealed class CentralStore(NpgsqlDataSource db)
 
     /// <summary>Returns alarms inserted. An empty batch with nothing rejected is a no-op (counters stay untouched).</summary>
     public async Task<int> InsertAlarmsAsync(
-        IReadOnlyList<MachineAlarm> batch, IReadOnlyList<RejectedRecord> rejected, string writerId, CancellationToken ct)
+        IReadOnlyList<MachineAlarm> batch,
+        IReadOnlyList<RejectedRecord> rejected,
+        string writerId,
+        CancellationToken ct
+    )
     {
-        if (batch.Count == 0 && rejected.Count == 0) return 0;
+        if (batch.Count == 0 && rejected.Count == 0)
+            return 0;
 
         await using var conn = await db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -99,15 +151,63 @@ public sealed class CentralStore(NpgsqlDataSource db)
         if (batch.Count > 0)
         {
             await using var cmd = new NpgsqlCommand(InsertAlarms, conn, tx);
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("machine_ids", [.. batch.Select(a => a.MachineId)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<long[]>("alarm_seqs", [.. batch.Select(a => a.AlarmSeq)]) { NpgsqlDbType = (NpgsqlDbType)BigintArray });
-            cmd.Parameters.Add(new NpgsqlParameter<long[]>("reading_seqs", [.. batch.Select(a => a.ReadingSeq)]) { NpgsqlDbType = (NpgsqlDbType)BigintArray });
-            cmd.Parameters.Add(new NpgsqlParameter<DateTime[]>("device_times", [.. batch.Select(a => a.DeviceTime.UtcDateTime)]) { NpgsqlDbType = (NpgsqlDbType)TimestampTzArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("kinds", [.. batch.Select(a => a.Kind.ToString())]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string[]>("severities", [.. batch.Select(a => a.Severity)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<string?[]>("signals", [.. batch.Select(a => a.Signal)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
-            cmd.Parameters.Add(new NpgsqlParameter<double?[]>("values", [.. batch.Select(a => a.Value)]) { NpgsqlDbType = (NpgsqlDbType)DoubleArray });
-            cmd.Parameters.Add(new NpgsqlParameter<double?[]>("thresholds", [.. batch.Select(a => a.Threshold)]) { NpgsqlDbType = (NpgsqlDbType)DoubleArray });
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("machine_ids", [.. batch.Select(a => a.MachineId)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<long[]>("alarm_seqs", [.. batch.Select(a => a.AlarmSeq)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)BigintArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<long[]>("reading_seqs", [.. batch.Select(a => a.ReadingSeq)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)BigintArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<DateTime[]>(
+                    "device_times",
+                    [.. batch.Select(a => a.DeviceTime.UtcDateTime)]
+                )
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TimestampTzArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("kinds", [.. batch.Select(a => a.Kind.ToString())])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string[]>("severities", [.. batch.Select(a => a.Severity)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<string?[]>("signals", [.. batch.Select(a => a.Signal)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)TextArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<double?[]>("values", [.. batch.Select(a => a.Value)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)DoubleArray,
+                }
+            );
+            cmd.Parameters.Add(
+                new NpgsqlParameter<double?[]>("thresholds", [.. batch.Select(a => a.Threshold)])
+                {
+                    NpgsqlDbType = (NpgsqlDbType)DoubleArray,
+                }
+            );
             inserted = (int)(long)(await cmd.ExecuteScalarAsync(ct))!;
         }
         await AddTotalsAsync(conn, tx, "alarms", writerId, batch.Count, inserted, ct);
@@ -117,7 +217,11 @@ public sealed class CentralStore(NpgsqlDataSource db)
     }
 
     private static async Task QuarantineAsync(
-        NpgsqlConnection conn, NpgsqlTransaction tx, IReadOnlyList<RejectedRecord> rejected, CancellationToken ct)
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        IReadOnlyList<RejectedRecord> rejected,
+        CancellationToken ct
+    )
     {
         foreach (var r in rejected)
         {
@@ -132,7 +236,14 @@ public sealed class CentralStore(NpgsqlDataSource db)
     }
 
     private static async Task AddTotalsAsync(
-        NpgsqlConnection conn, NpgsqlTransaction tx, string stream, string writerId, int received, int inserted, CancellationToken ct)
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        string stream,
+        string writerId,
+        int received,
+        int inserted,
+        CancellationToken ct
+    )
     {
         await using var cmd = new NpgsqlCommand(AddTotals, conn, tx);
         cmd.Parameters.AddWithValue("stream", stream);

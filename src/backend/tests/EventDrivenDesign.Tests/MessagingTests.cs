@@ -8,7 +8,8 @@ namespace EventDrivenDesign.Tests;
 
 public class MessagingTests
 {
-    private static string Header(Headers h, string key) => Encoding.UTF8.GetString(h.GetLastBytes(key));
+    private static string Header(Headers h, string key) =>
+        Encoding.UTF8.GetString(h.GetLastBytes(key));
 
     [Fact]
     public void Producer_settings_match_the_spec()
@@ -49,8 +50,8 @@ public class MessagingTests
     }
 
     [Fact]
-    public void Admin_settings_carry_the_bootstrap_servers()
-        => KafkaConfigs.Admin("kafka:9092").BootstrapServers.Should().Be("kafka:9092");
+    public void Admin_settings_carry_the_bootstrap_servers() =>
+        KafkaConfigs.Admin("kafka:9092").BootstrapServers.Should().Be("kafka:9092");
 
     [Fact]
     public void Reading_headers()
@@ -82,7 +83,8 @@ public class MessagingTests
             var cap = TimeSpan.FromSeconds(Math.Min(30, 0.1 * Math.Pow(2, attempt)));
             var d = Retry.Backoff(attempt, rng);
             d.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero).And.BeLessThanOrEqualTo(cap);
-            if (attempt == 0) d.Should().BeLessThanOrEqualTo(TimeSpan.FromMilliseconds(100));
+            if (attempt == 0)
+                d.Should().BeLessThanOrEqualTo(TimeSpan.FromMilliseconds(100));
         }
     }
 }

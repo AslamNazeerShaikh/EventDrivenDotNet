@@ -10,12 +10,20 @@ using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
-string[] Split(string key, string fallback) => (config[key] ?? fallback).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-var gateways = Split("Api:Gateways", "gateway-prs:8080,gateway-bdy:8080,gateway-pnt:8080,gateway-mch:8080,gateway-asm:8080");
+string[] Split(string key, string fallback) =>
+    (config[key] ?? fallback).Split(
+        ',',
+        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+    );
+var gateways = Split(
+    "Api:Gateways",
+    "gateway-prs:8080,gateway-bdy:8080,gateway-pnt:8080,gateway-mch:8080,gateway-asm:8080"
+);
 var consumers = Split("Api:Consumers", "consumer-1:8080,consumer-2:8080");
 var plantBootstrap = config["Kafka:Plant"] ?? "plant-kafka:9092";
 var centralBootstrap = config["Kafka:Central"] ?? "central-kafka:9092";
-var connectionString = config["ConnectionStrings:Central"] ?? "Host=central-db;Username=edd;Password=edd;Database=edd";
+var connectionString = config["ConnectionStrings:Central"]
+    ?? "Host=central-db;Username=edd;Password=edd;Database=edd";
 var gatewayShops = gateways.Select(Pollers.ShopOf).ToList();
 
 builder.Services.AddGlobalExceptionHandling();
@@ -28,15 +36,39 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddSingleton(new Snapshot(gatewayShops, consumers.Select(c => c.Split(':')[0])));
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton(sp => new CentralQueries(sp.GetRequiredService<NpgsqlDataSource>()));
-builder.Services.AddSingleton(_ => new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) }) { Timeout = TimeSpan.FromSeconds(3) });
+builder.Services.AddSingleton(_ => new HttpClient(
+    new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) }
+)
+{
+    Timeout = TimeSpan.FromSeconds(3),
+});
 builder.Services.AddSingleton(sp =>
 {
     var snapshot = sp.GetRequiredService<Snapshot>();
     var loggers = sp.GetRequiredService<ILoggerFactory>();
-    return new Pollers(snapshot, sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<CentralQueries>(),
-        new KafkaWatcher(plantBootstrap, TopicNames.Readings, null, snapshot.SeenPlant, loggers.CreateLogger("plant-kafka")),
-        new KafkaWatcher(centralBootstrap, "plant1." + TopicNames.Readings, "central-readings", snapshot.SeenCentral, loggers.CreateLogger("central-kafka")),
-        gateways, consumers, TimeProvider.System, loggers.CreateLogger<Pollers>());
+    return new Pollers(
+        snapshot,
+        sp.GetRequiredService<HttpClient>(),
+        sp.GetRequiredService<CentralQueries>(),
+        new KafkaWatcher(
+            plantBootstrap,
+            TopicNames.Readings,
+            null,
+            snapshot.SeenPlant,
+            loggers.CreateLogger("plant-kafka")
+        ),
+        new KafkaWatcher(
+            centralBootstrap,
+            "plant1." + TopicNames.Readings,
+            "central-readings",
+            snapshot.SeenCentral,
+            loggers.CreateLogger("central-kafka")
+        ),
+        gateways,
+        consumers,
+        TimeProvider.System,
+        loggers.CreateLogger<Pollers>()
+    );
 });
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Pollers>());
 
@@ -45,49 +77,100 @@ app.UseGlobalExceptionHandling();
 
 app.MapGet("/healthz", () => Results.Ok());
 
-app.MapGet("/api/overview", (Snapshot s) => Results.Json(OverviewBuilder.Build(s, TimeProvider.System.GetUtcNow()), Json.Options));
+app.MapGet("/api/overview", (Snapshot s) =>
+    Results.Json(OverviewBuilder.Build(s, TimeProvider.System.GetUtcNow()), Json.Options)
+);
 
-app.MapGet("/api/reconciliation", async (bool? full, Snapshot s, Pollers pollers, CentralQueries queries, CancellationToken ct) =>
-{
-    // Fresh progress rows, so the verdict never rests on a sample older than the offsets. A down database keeps the old sample, which then reads as not drained.
-    try { await pollers.RefreshDbAsync(ct); } catch (Exception) when (!ct.IsCancellationRequested) { }
-    long? duplicateRows = null;
-    if (full == true)
-        duplicateRows = (await Db(queries.DuplicateRowsAsync, ct)) is { IsSuccess: true } r ? r.Value : null;
-    return Results.Json(OverviewBuilder.Reconcile(s, TimeProvider.System.GetUtcNow(), duplicateRows), Json.Options);
-});
+app.MapGet(
+    "/api/reconciliation",
+    async (bool? full, Snapshot s, Pollers pollers, CentralQueries queries, CancellationToken ct) =>
+    {
+        // Fresh progress rows, so the verdict never rests on a sample older than the offsets. A down database keeps the old sample, which then reads as not drained.
+        try
+        {
+            await pollers.RefreshDbAsync(ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { }
+        long? duplicateRows = null;
+        if (full == true)
+            duplicateRows = (await Db(queries.DuplicateRowsAsync, ct)) is { IsSuccess: true } r
+                ? r.Value
+                : null;
+        return Results.Json(
+            OverviewBuilder.Reconcile(s, TimeProvider.System.GetUtcNow(), duplicateRows),
+            Json.Options
+        );
+    }
+);
 
-app.MapGet("/api/chart", async (int? minutes, Snapshot s, CentralQueries queries, CancellationToken ct) =>
-{
-    var buckets = await Db(c => queries.ChartAsync(Math.Clamp(minutes ?? 10, 1, 180), c), ct);
-    var watermark = s.Db is { } db ? Proof.Watermark(db.Value.Progress) : null;
-    return buckets.Match(b => Results.Json(OverviewBuilder.BuildChart(b, watermark), Json.Options), e => Failure(e));
-});
+app.MapGet(
+    "/api/chart",
+    async (int? minutes, Snapshot s, CentralQueries queries, CancellationToken ct) =>
+    {
+        var buckets = await Db(c => queries.ChartAsync(Math.Clamp(minutes ?? 10, 1, 180), c), ct);
+        var watermark = s.Db is { } db ? Proof.Watermark(db.Value.Progress) : null;
+        return buckets.Match(
+            b => Results.Json(OverviewBuilder.BuildChart(b, watermark), Json.Options),
+            e => Failure(e)
+        );
+    }
+);
 
 app.MapGet("/api/alarms", async (CentralQueries queries, CancellationToken ct) =>
-    (await Db(c => queries.RecentAlarmsAsync(50, c), ct)).ToHttpResult());
+    (await Db(c => queries.RecentAlarmsAsync(50, c), ct)).ToHttpResult()
+);
 
-app.MapPost("/api/plant/pause", (Snapshot s, HttpClient http, CancellationToken ct) => FanOut(new Pause(), s, http, ct));
-app.MapPost("/api/plant/resume", (Snapshot s, HttpClient http, CancellationToken ct) => FanOut(new Resume(), s, http, ct));
+app.MapPost("/api/plant/pause", (Snapshot s, HttpClient http, CancellationToken ct) =>
+    FanOut(new Pause(), s, http, ct)
+);
+app.MapPost("/api/plant/resume", (Snapshot s, HttpClient http, CancellationToken ct) =>
+    FanOut(new Resume(), s, http, ct)
+);
 
-app.MapPost("/api/machines/{machineId}/faults", async (string machineId, FaultRequest body, HttpClient http, CancellationToken ct) =>
-{
-    var gateway = ApiRoutes.GatewayFor(machineId);
-    if (gateway.Error is { } bad) return Failure(bad);
-    try
+app.MapPost(
+    "/api/machines/{machineId}/faults",
+    async (string machineId, FaultRequest body, HttpClient http, CancellationToken ct) =>
     {
-        using var response = await http.PostAsJsonAsync($"http://{gateway.Value}/control", (GatewayCommand)new InjectFault(machineId, body.Kind), Json.Options, ct);
-        if ((int)response.StatusCode == 400 || (int)response.StatusCode == 404)
-            return Results.Content(await response.Content.ReadAsStringAsync(ct), "application/problem+json", statusCode: (int)response.StatusCode);
-        return response.IsSuccessStatusCode
-            ? Results.StatusCode(StatusCodes.Status202Accepted)
-            : Failure(new Error("api.gateway.unavailable", $"{gateway.Value} answered {(int)response.StatusCode}.", ErrorKind.Unavailable));
+        var gateway = ApiRoutes.GatewayFor(machineId);
+        if (gateway.Error is { } bad)
+            return Failure(bad);
+        try
+        {
+            using var response = await http.PostAsJsonAsync(
+                $"http://{gateway.Value}/control",
+                (GatewayCommand)new InjectFault(machineId, body.Kind),
+                Json.Options,
+                ct
+            );
+            if ((int)response.StatusCode == 400 || (int)response.StatusCode == 404)
+                return Results.Content(
+                    await response.Content.ReadAsStringAsync(ct),
+                    "application/problem+json",
+                    statusCode: (int)response.StatusCode
+                );
+            return response.IsSuccessStatusCode
+                ? Results.StatusCode(StatusCodes.Status202Accepted)
+                : Failure(
+                    new Error(
+                        "api.gateway.unavailable",
+                        $"{gateway.Value} answered {(int)response.StatusCode}.",
+                        ErrorKind.Unavailable
+                    )
+                );
+        }
+        catch (Exception e)
+            when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return Failure(
+                new Error(
+                    "api.gateway.unavailable",
+                    $"{gateway.Value} is unreachable.",
+                    ErrorKind.Unavailable
+                )
+            );
+        }
     }
-    catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
-    {
-        return Failure(new Error("api.gateway.unavailable", $"{gateway.Value} is unreachable.", ErrorKind.Unavailable));
-    }
-});
+);
 
 app.Run();
 
@@ -98,33 +181,61 @@ static async Task<Result<T>> Db<T>(Func<CancellationToken, Task<T>> query, Cance
 {
     using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
     cts.CancelAfter(TimeSpan.FromSeconds(2));
-    try { return await query(cts.Token); }
+    try
+    {
+        return await query(cts.Token);
+    }
     catch (Exception) when (!ct.IsCancellationRequested)
     {
-        return new Error("api.database.unavailable", "The central database did not answer.", ErrorKind.Unavailable);
+        return new Error(
+            "api.database.unavailable",
+            "The central database did not answer.",
+            ErrorKind.Unavailable
+        );
     }
 }
 
 // Pause and resume are idempotent at the gateway, so a retry after a partial failure is safe.
-static async Task<IResult> FanOut(GatewayCommand command, Snapshot s, HttpClient http, CancellationToken ct)
+static async Task<IResult> FanOut(
+    GatewayCommand command,
+    Snapshot s,
+    HttpClient http,
+    CancellationToken ct
+)
 {
     var shops = s.Shops;
-    var outcomes = await Task.WhenAll(shops.Select(async shop =>
-    {
-        try
+    var outcomes = await Task.WhenAll(
+        shops.Select(async shop =>
         {
-            using var response = await http.PostAsJsonAsync($"http://gateway-{shop.ToLowerInvariant()}:8080/control", command, Json.Options, ct);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
-        {
-            return false;
-        }
-    }));
+            try
+            {
+                using var response = await http.PostAsJsonAsync(
+                    $"http://gateway-{shop.ToLowerInvariant()}:8080/control",
+                    command,
+                    Json.Options,
+                    ct
+                );
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception e)
+                when (e is HttpRequestException or TaskCanceledException
+                    && !ct.IsCancellationRequested
+                )
+            {
+                return false;
+            }
+        })
+    );
     var failed = shops.Where((_, i) => !outcomes[i]).ToList();
     return failed.Count == 0
         ? Results.StatusCode(StatusCodes.Status202Accepted)
-        : Failure(new Error("api.gateway.unavailable", $"Not reached: {string.Join(", ", failed)}.", ErrorKind.Unavailable));
+        : Failure(
+            new Error(
+                "api.gateway.unavailable",
+                $"Not reached: {string.Join(", ", failed)}.",
+                ErrorKind.Unavailable
+            )
+        );
 }
 
 internal sealed record FaultRequest(AlarmKind Kind);

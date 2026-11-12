@@ -21,8 +21,12 @@ public sealed class GatewayBufferTests : IDisposable
     private static OutboxRow Row(Lane lane, long seq, long timeMs) =>
         new(0, lane, Machine, seq, timeMs, [1, 2, 3]);
 
-    private static TickBatch Tick(long lastSeq, long lastAlarmSeq, long timeMs, params OutboxRow[] rows) =>
-        new(rows, [new MachineState(Machine, lastSeq, lastAlarmSeq, timeMs)]);
+    private static TickBatch Tick(
+        long lastSeq,
+        long lastAlarmSeq,
+        long timeMs,
+        params OutboxRow[] rows
+    ) => new(rows, [new MachineState(Machine, lastSeq, lastAlarmSeq, timeMs)]);
 
     [Fact]
     public async Task New_file_uses_wal_full_and_incremental_vacuum()
@@ -58,7 +62,13 @@ public sealed class GatewayBufferTests : IDisposable
         await buffer.WriteTickAsync(Tick(1, 0, 1000), ct);
 
         // The second row violates NOT NULL on payload after the first row and a new state were prepared.
-        var bad = Tick(3, 0, 2000, Row(Lane.Reading, 2, 2000), new OutboxRow(0, Lane.Reading, Machine, 3, 2000, null!));
+        var bad = Tick(
+            3,
+            0,
+            2000,
+            Row(Lane.Reading, 2, 2000),
+            new OutboxRow(0, Lane.Reading, Machine, 3, 2000, null!)
+        );
         var act = () => buffer.WriteTickAsync(bad, ct);
 
         await act.Should().ThrowAsync<Exception>();
@@ -76,7 +86,8 @@ public sealed class GatewayBufferTests : IDisposable
     {
         var ct = TestContext.Current.CancellationToken;
         var buffer = GatewayBuffer.Open(DbPath);
-        var pending = Enumerable.Range(1, 20)
+        var pending = Enumerable
+            .Range(1, 20)
             .Select(i => buffer.WriteTickAsync(Tick(i, 0, i, Row(Lane.Reading, i, i)), ct))
             .ToArray();
 
@@ -96,8 +107,18 @@ public sealed class GatewayBufferTests : IDisposable
         await using (var buffer = GatewayBuffer.Open(DbPath))
         {
             await buffer.WriteTickAsync(
-                Tick(3, 2, 1000, Row(Lane.Reading, 1, 1100), Row(Lane.Reading, 2, 1200), Row(Lane.Reading, 3, 1300),
-                    Row(Lane.Alarm, 1, 1050), Row(Lane.Alarm, 2, 1400)), ct);
+                Tick(
+                    3,
+                    2,
+                    1000,
+                    Row(Lane.Reading, 1, 1100),
+                    Row(Lane.Reading, 2, 1200),
+                    Row(Lane.Reading, 3, 1300),
+                    Row(Lane.Alarm, 1, 1050),
+                    Row(Lane.Alarm, 2, 1400)
+                ),
+                ct
+            );
             var rows = buffer.ReadOldest(10); // alarm 1, alarm 2, reading 1..3
             await buffer.DeleteAsync([rows[0].Id, rows[2].Id, 999_999], ct); // alarm 1, reading 1, and a missing id
 
@@ -115,17 +136,42 @@ public sealed class GatewayBufferTests : IDisposable
     {
         await using var buffer = GatewayBuffer.Open(DbPath);
         await buffer.WriteTickAsync(
-            Tick(3, 1, 1000, Row(Lane.Reading, 1, 1000), Row(Lane.Reading, 2, 1000), Row(Lane.Reading, 3, 1000), Row(Lane.Alarm, 1, 1000)),
-            TestContext.Current.CancellationToken);
+            Tick(
+                3,
+                1,
+                1000,
+                Row(Lane.Reading, 1, 1000),
+                Row(Lane.Reading, 2, 1000),
+                Row(Lane.Reading, 3, 1000),
+                Row(Lane.Alarm, 1, 1000)
+            ),
+            TestContext.Current.CancellationToken
+        );
         await buffer.WriteTickAsync(
-            Tick(6, 1, 2000, Row(Lane.Reading, 4, 2000), Row(Lane.Reading, 5, 2000), Row(Lane.Reading, 6, 2000)),
-            TestContext.Current.CancellationToken);
+            Tick(
+                6,
+                1,
+                2000,
+                Row(Lane.Reading, 4, 2000),
+                Row(Lane.Reading, 5, 2000),
+                Row(Lane.Reading, 6, 2000)
+            ),
+            TestContext.Current.CancellationToken
+        );
 
         var rows = buffer.ReadOldest(10);
 
-        rows.Select(r => (r.Lane, r.Seq)).Should().Equal(
-            (Lane.Alarm, 1L), (Lane.Reading, 1L), (Lane.Reading, 2L), (Lane.Reading, 3L),
-            (Lane.Reading, 4L), (Lane.Reading, 5L), (Lane.Reading, 6L));
+        rows.Select(r => (r.Lane, r.Seq))
+            .Should()
+            .Equal(
+                (Lane.Alarm, 1L),
+                (Lane.Reading, 1L),
+                (Lane.Reading, 2L),
+                (Lane.Reading, 3L),
+                (Lane.Reading, 4L),
+                (Lane.Reading, 5L),
+                (Lane.Reading, 6L)
+            );
     }
 
     [Fact]
@@ -135,15 +181,21 @@ public sealed class GatewayBufferTests : IDisposable
         var expected = new MachineState(Machine, 7, 2, 1000);
         await using (var buffer = GatewayBuffer.Open(DbPath))
         {
-            await buffer.WriteTickAsync(Tick(7, 2, 1000, Row(Lane.Reading, 7, 1000), Row(Lane.Alarm, 2, 1000)), ct);
+            await buffer.WriteTickAsync(
+                Tick(7, 2, 1000, Row(Lane.Reading, 7, 1000), Row(Lane.Alarm, 2, 1000)),
+                ct
+            );
         }
 
         await using var reopened = GatewayBuffer.Open(DbPath);
 
         reopened.IsNew.Should().BeFalse();
         reopened.LoadState()[Machine].Should().Be(expected);
-        reopened.ReadOldest(10).Select(r => (r.Lane, r.Seq, r.MachineId, r.DeviceTimeMs)).Should().Equal(
-            (Lane.Alarm, 2L, Machine, 1000L), (Lane.Reading, 7L, Machine, 1000L));
+        reopened
+            .ReadOldest(10)
+            .Select(r => (r.Lane, r.Seq, r.MachineId, r.DeviceTimeMs))
+            .Should()
+            .Equal((Lane.Alarm, 2L, Machine, 1000L), (Lane.Reading, 7L, Machine, 1000L));
         reopened.ReadOldest(10)[0].Payload.Should().Equal([1, 2, 3]);
     }
 
@@ -153,7 +205,16 @@ public sealed class GatewayBufferTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         await using var buffer = GatewayBuffer.Open(DbPath);
         await buffer.WriteTickAsync(
-            Tick(3, 0, 1000, Row(Lane.Reading, 1, 1000), Row(Lane.Reading, 2, 1000), Row(Lane.Reading, 3, 1000)), ct);
+            Tick(
+                3,
+                0,
+                1000,
+                Row(Lane.Reading, 1, 1000),
+                Row(Lane.Reading, 2, 1000),
+                Row(Lane.Reading, 3, 1000)
+            ),
+            ct
+        );
         var rows = buffer.ReadOldest(10);
 
         await buffer.DeleteAsync([rows[0].Id, rows[2].Id], ct);
@@ -180,8 +241,17 @@ public sealed class GatewayBufferTests : IDisposable
     {
         await using var buffer = GatewayBuffer.Open(DbPath);
         await buffer.WriteTickAsync(
-            Tick(3, 1, 1000, Row(Lane.Reading, 1, 1200), Row(Lane.Reading, 2, 1500), Row(Lane.Reading, 3, 1800), Row(Lane.Alarm, 1, 1300)),
-            TestContext.Current.CancellationToken);
+            Tick(
+                3,
+                1,
+                1000,
+                Row(Lane.Reading, 1, 1200),
+                Row(Lane.Reading, 2, 1500),
+                Row(Lane.Reading, 3, 1800),
+                Row(Lane.Alarm, 1, 1300)
+            ),
+            TestContext.Current.CancellationToken
+        );
 
         var stats = buffer.Stats();
 

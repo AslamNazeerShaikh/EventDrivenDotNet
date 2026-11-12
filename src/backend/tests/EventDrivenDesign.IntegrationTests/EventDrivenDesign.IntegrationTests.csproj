@@ -16,6 +16,10 @@
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../../../deployment/postgres/01-schema.sql" Link="01-schema.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None
+      Include="../../../deployment/postgres/01-schema.sql"
+      Link="01-schema.sql"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
 </Project>

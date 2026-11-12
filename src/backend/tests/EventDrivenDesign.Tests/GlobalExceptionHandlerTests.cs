@@ -17,31 +17,45 @@ namespace EventDrivenDesign.Tests;
 
 public class GlobalExceptionHandlerTests
 {
-    private static async Task<(WebApplication App, HttpClient Client)> StartAsync(Action<WebApplication> map)
+    private static async Task<(WebApplication App, HttpClient Client)> StartAsync(
+        Action<WebApplication> map
+    )
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Services.AddGlobalExceptionHandling();
-        builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, Json.Options.TypeInfoResolver!));
+        builder.Services.ConfigureHttpJsonOptions(o =>
+            o.SerializerOptions.TypeInfoResolverChain.Insert(0, Json.Options.TypeInfoResolver!)
+        );
         WebApplication app = builder.Build();
         app.UseGlobalExceptionHandling();
         map(app);
         await app.StartAsync(TestContext.Current.CancellationToken);
-        string address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+        string address = app
+            .Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!
+            .Addresses.First();
         return (app, new HttpClient { BaseAddress = new Uri(address) });
     }
 
     [Fact]
     public async Task Unhandled_exception_becomes_problem_500_without_leaking()
     {
-        (WebApplication app, HttpClient client) = await StartAsync(a =>
-            a.MapGet("/boom", () => { throw new InvalidOperationException("secret detail"); }));
+        (WebApplication app, HttpClient client) = await StartAsync(a => a.MapGet("/boom", () =>
+            {
+                throw new InvalidOperationException("secret detail");
+            }));
         await using (app)
         using (client)
         {
-            HttpResponseMessage res = await client.GetAsync("/boom", TestContext.Current.CancellationToken);
-            string body = await res.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            HttpResponseMessage res = await client.GetAsync(
+                "/boom",
+                TestContext.Current.CancellationToken
+            );
+            string body = await res.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken
+            );
 
             ((int)res.StatusCode).Should().Be(500);
             res.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
@@ -54,11 +68,16 @@ public class GlobalExceptionHandlerTests
     public async Task Malformed_json_becomes_400()
     {
         (WebApplication app, HttpClient client) = await StartAsync(a =>
-            a.MapPost("/cmd", (GatewayCommand _) => Results.Accepted()));
+            a.MapPost("/cmd", (GatewayCommand _) => Results.Accepted())
+        );
         await using (app)
         using (client)
         {
-            HttpResponseMessage res = await client.PostAsync("/cmd", new StringContent("[]", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
+            HttpResponseMessage res = await client.PostAsync(
+                "/cmd",
+                new StringContent("[]", Encoding.UTF8, "application/json"),
+                TestContext.Current.CancellationToken
+            );
 
             ((int)res.StatusCode).Should().Be(400);
             res.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
@@ -77,16 +96,20 @@ public class GlobalExceptionHandlerTests
     [Fact]
     public async Task Json_exception_from_an_endpoint_becomes_malformed_request_400()
     {
-        (WebApplication app, HttpClient client) = await StartAsync(a =>
-            a.MapGet("/bad", () => { throw new JsonException("x"); }));
+        (WebApplication app, HttpClient client) = await StartAsync(a => a.MapGet("/bad", () =>
+            {
+                throw new JsonException("x");
+            }));
         await AssertMalformedAsync(app, client);
     }
 
     [Fact]
     public async Task Bad_http_request_from_an_endpoint_becomes_malformed_request_400()
     {
-        (WebApplication app, HttpClient client) = await StartAsync(a =>
-            a.MapGet("/bad", () => { throw new BadHttpRequestException("x"); }));
+        (WebApplication app, HttpClient client) = await StartAsync(a => a.MapGet("/bad", () =>
+            {
+                throw new BadHttpRequestException("x");
+            }));
         await AssertMalformedAsync(app, client);
     }
 
@@ -95,12 +118,22 @@ public class GlobalExceptionHandlerTests
         await using (app)
         using (client)
         {
-            HttpResponseMessage res = await client.GetAsync("/bad", TestContext.Current.CancellationToken);
-            string body = await res.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            HttpResponseMessage res = await client.GetAsync(
+                "/bad",
+                TestContext.Current.CancellationToken
+            );
+            string body = await res.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken
+            );
 
             ((int)res.StatusCode).Should().Be(400);
             res.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
-            JsonDocument.Parse(body).RootElement.GetProperty("title").GetString().Should().Be("Malformed request");
+            JsonDocument
+                .Parse(body)
+                .RootElement.GetProperty("title")
+                .GetString()
+                .Should()
+                .Be("Malformed request");
         }
     }
 }

@@ -77,7 +77,10 @@ public class ResultTests
     [InlineData(ErrorKind.Unavailable, 503)]
     public async Task Failed_result_maps_to_problem_by_kind(ErrorKind kind, int status)
     {
-        await using ServiceProvider services = new ServiceCollection().AddProblemDetails().AddLogging().BuildServiceProvider();
+        await using ServiceProvider services = new ServiceCollection()
+            .AddProblemDetails()
+            .AddLogging()
+            .BuildServiceProvider();
         var ctx = new DefaultHttpContext { RequestServices = services };
         ctx.Response.Body = new MemoryStream();
 
@@ -85,7 +88,10 @@ public class ResultTests
 
         ctx.Response.StatusCode.Should().Be(status);
         ctx.Response.Body.Position = 0;
-        using JsonDocument body = await JsonDocument.ParseAsync(ctx.Response.Body, cancellationToken: TestContext.Current.CancellationToken);
+        using JsonDocument body = await JsonDocument.ParseAsync(
+            ctx.Response.Body,
+            cancellationToken: TestContext.Current.CancellationToken
+        );
         body.RootElement.GetProperty("title").GetString().Should().Be("the-code");
     }
 }

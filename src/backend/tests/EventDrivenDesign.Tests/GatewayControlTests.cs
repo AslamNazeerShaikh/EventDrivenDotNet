@@ -34,7 +34,10 @@ public sealed class GatewayControlTests : IAsyncLifetime
     [Fact]
     public async Task Inject_valid_fault_succeeds_and_reaches_the_collector()
     {
-        var result = await _control.ApplyAsync(new InjectFault("P1-BDY-W042", AlarmKind.Overheat), TestContext.Current.CancellationToken);
+        var result = await _control.ApplyAsync(
+            new InjectFault("P1-BDY-W042", AlarmKind.Overheat),
+            TestContext.Current.CancellationToken
+        );
 
         result.IsSuccess.Should().BeTrue();
         _collector.Tick(T0).Rows.Should().ContainSingle(r => r.Lane == Lane.Alarm);
@@ -43,17 +46,29 @@ public sealed class GatewayControlTests : IAsyncLifetime
     [Fact]
     public async Task Unknown_machine_is_not_found()
     {
-        var result = await _control.ApplyAsync(new InjectFault("P1-BDY-X999", AlarmKind.Overheat), TestContext.Current.CancellationToken);
+        var result = await _control.ApplyAsync(
+            new InjectFault("P1-BDY-X999", AlarmKind.Overheat),
+            TestContext.Current.CancellationToken
+        );
 
-        result.Error.Should().Be(new Error("gateway.machine.unknown", result.Error!.Message, ErrorKind.NotFound));
+        result
+            .Error.Should()
+            .Be(new Error("gateway.machine.unknown", result.Error!.Message, ErrorKind.NotFound));
     }
 
     [Fact]
     public async Task Inapplicable_fault_is_invalid()
     {
-        var result = await _control.ApplyAsync(new InjectFault("P1-BDY-W042", AlarmKind.EStop), TestContext.Current.CancellationToken);
+        var result = await _control.ApplyAsync(
+            new InjectFault("P1-BDY-W042", AlarmKind.EStop),
+            TestContext.Current.CancellationToken
+        );
 
-        result.Error.Should().Be(new Error("gateway.fault.not_applicable", result.Error!.Message, ErrorKind.Invalid));
+        result
+            .Error.Should()
+            .Be(
+                new Error("gateway.fault.not_applicable", result.Error!.Message, ErrorKind.Invalid)
+            );
     }
 
     [Fact]

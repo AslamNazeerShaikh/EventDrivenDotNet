@@ -2,7 +2,14 @@ using EventDrivenDesign.Contracts;
 
 namespace EventDrivenDesign.Domain;
 
-public sealed record SignalSpec(string Name, double Min, double Max, AlarmKind? Kind = null, double? Above = null, double? Below = null);
+public sealed record SignalSpec(
+    string Name,
+    double Min,
+    double Max,
+    AlarmKind? Kind = null,
+    double? Above = null,
+    double? Below = null
+);
 
 public static class Signals
 {

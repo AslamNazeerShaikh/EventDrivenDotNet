@@ -4,5 +4,10 @@ namespace EventDrivenDesign.Consumer;
 public sealed class LoopService(Action<CancellationToken> run) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        Task.Factory.StartNew(() => run(stoppingToken), stoppingToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Task.Factory.StartNew(
+            () => run(stoppingToken),
+            stoppingToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default
+        );
 }

@@ -26,8 +26,12 @@ public class SimulatorTests
 
     [Fact]
     public void Plant_has_500_unique_ids() =>
-        MachineCatalog.Shops.SelectMany(s => MachineCatalog.ForShop("P1", s)).Select(m => m.MachineId)
-            .Distinct().Should().HaveCount(500);
+        MachineCatalog
+            .Shops.SelectMany(s => MachineCatalog.ForShop("P1", s))
+            .Select(m => m.MachineId)
+            .Distinct()
+            .Should()
+            .HaveCount(500);
 
     [Fact]
     public void Shops_are_the_five_spec_shops() =>
@@ -73,10 +77,15 @@ public class SimulatorTests
         var sim = Sim("BDY", 41, 2041);
         sim.InjectFault(AlarmKind.Overheat).Should().BeTrue();
         var ticks = Enumerable.Range(0, 11).Select(_ => sim.Next()).ToList();
-        ticks.Take(10).Should().AllSatisfy(t => t.Signals["motor_temp_c"].Should().BeApproximately(88, 1e-6));
+        ticks
+            .Take(10)
+            .Should()
+            .AllSatisfy(t => t.Signals["motor_temp_c"].Should().BeApproximately(88, 1e-6));
         ticks[10].Signals["motor_temp_c"].Should().BeInRange(40, 70);
         var alarm = ticks.SelectMany(t => t.Alarms).Should().ContainSingle().Subject;
-        (alarm.Kind, alarm.Severity, alarm.Signal, alarm.Threshold).Should().Be((AlarmKind.Overheat, "critical", "motor_temp_c", (double?)85.0));
+        (alarm.Kind, alarm.Severity, alarm.Signal, alarm.Threshold)
+            .Should()
+            .Be((AlarmKind.Overheat, "critical", "motor_temp_c", (double?)85.0));
         alarm.Value.Should().BeApproximately(88, 1e-6);
         ticks[0].Alarms.Should().ContainSingle();
     }
@@ -114,7 +123,10 @@ public class SimulatorTests
         var sim = Sim("ASM", 60, 1);
         sim.InjectFault(AlarmKind.EStop).Should().BeTrue();
         var ticks = Enumerable.Range(0, 11).Select(_ => sim.Next()).ToList();
-        ticks.Take(10).Should().AllSatisfy(t => t.Signals["e_stop"].Should().BeApproximately(1, 1e-6));
+        ticks
+            .Take(10)
+            .Should()
+            .AllSatisfy(t => t.Signals["e_stop"].Should().BeApproximately(1, 1e-6));
         ticks[10].Signals["e_stop"].Should().Be(0);
         var alarm = ticks.SelectMany(t => t.Alarms).Should().ContainSingle().Subject;
         (alarm.Kind, alarm.Severity).Should().Be((AlarmKind.EStop, "critical"));

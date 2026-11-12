@@ -17,7 +17,11 @@ public union GatewayCommand(Pause, Resume, InjectFault);
 
 public sealed class GatewayCommandConverter : JsonConverter<GatewayCommand>
 {
-    public override GatewayCommand Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override GatewayCommand Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
     {
         using JsonDocument doc = JsonDocument.ParseValue(ref reader);
         if (doc.RootElement.ValueKind != JsonValueKind.Object)
@@ -25,7 +29,9 @@ public sealed class GatewayCommandConverter : JsonConverter<GatewayCommand>
             throw new JsonException("GatewayCommand must be a JSON object.");
         }
 
-        string? kind = doc.RootElement.TryGetProperty("$type", out JsonElement t) ? t.GetString() : null;
+        string? kind = doc.RootElement.TryGetProperty("$type", out JsonElement t)
+            ? t.GetString()
+            : null;
         return kind switch
         {
             "Pause" => (GatewayCommand)doc.RootElement.Deserialize<Pause>(options)!,
@@ -35,7 +41,11 @@ public sealed class GatewayCommandConverter : JsonConverter<GatewayCommand>
         };
     }
 
-    public override void Write(Utf8JsonWriter writer, GatewayCommand value, JsonSerializerOptions options)
+    public override void Write(
+        Utf8JsonWriter writer,
+        GatewayCommand value,
+        JsonSerializerOptions options
+    )
     {
         (string kind, object active) = value switch
         {
@@ -46,7 +56,11 @@ public sealed class GatewayCommandConverter : JsonConverter<GatewayCommand>
         };
         writer.WriteStartObject();
         writer.WriteString("$type", kind);
-        foreach (JsonProperty prop in JsonSerializer.SerializeToElement(active, active.GetType(), options).EnumerateObject())
+        foreach (
+            JsonProperty prop in JsonSerializer
+                .SerializeToElement(active, active.GetType(), options)
+                .EnumerateObject()
+        )
         {
             prop.WriteTo(writer);
         }

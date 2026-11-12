@@ -10,7 +10,8 @@ namespace EventDrivenDesign.Tests;
 public class CollectorTests
 {
     private static readonly DateTimeOffset T0 = DateTimeOffset.Parse("2026-11-12T10:00:00Z");
-    private static readonly IReadOnlyDictionary<string, MachineState> NoState = new Dictionary<string, MachineState>();
+    private static readonly IReadOnlyDictionary<string, MachineState> NoState =
+        new Dictionary<string, MachineState>();
 
     private static Collector New(IReadOnlyDictionary<string, MachineState>? resume = null) =>
         new("P1", "BDY", 7, resume ?? NoState);
@@ -31,7 +32,10 @@ public class CollectorTests
     [Fact]
     public void Resume_continues_numbering()
     {
-        var resume = new Dictionary<string, MachineState> { ["P1-BDY-W042"] = new("P1-BDY-W042", 41, 0, 0) };
+        var resume = new Dictionary<string, MachineState>
+        {
+            ["P1-BDY-W042"] = new("P1-BDY-W042", 41, 0, 0),
+        };
         var batch = New(resume).Tick(T0);
         Reading(batch, "P1-BDY-W042").Seq.Should().Be(42);
         Reading(batch, "P1-BDY-W001").Seq.Should().Be(1);
@@ -76,7 +80,8 @@ public class CollectorTests
     public void Generated_counts_all_readings()
     {
         var collector = New();
-        for (var i = 0; i < 3; i++) collector.Tick(T0.AddSeconds(i));
+        for (var i = 0; i < 3; i++)
+            collector.Tick(T0.AddSeconds(i));
         collector.Generated.Should().Be(300);
         collector.LastSeqByMachine["P1-BDY-W042"].Should().Be(3);
     }
