@@ -339,7 +339,7 @@ At 500 records per second, Kafka is nowhere near its limits; a single partition 
 
 *Source: [07-multi-plant.html](diagrams/07-multi-plant.html)*
 
-Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plants. Store writers subscribe to `^plant\d+\.machine\.readings$`, so a new plant needs no code change.
+Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plants. Store writers subscribe to `^plant[0-9]+\.machine\.readings$`, so a new plant needs no code change.
 
 ### 4.10 Failure scenarios
 

@@ -69,7 +69,7 @@ Tasks 1 and 2 run in parallel. After Task 1: Tasks 3, 4 and 6 in parallel, and T
 
 **Interfaces:**
 - Produces: every record in §4 exactly as written (`MachineReading`, `MachineAlarm`, `AlarmKind`, `Pause`, `Resume`, `InjectFault`, `GatewayCommand`, `GatewayMetrics`, `ConsumerMetrics`, `ProcessStats`, `ServiceHealth` + `Healthy`/`Degraded`/`Down`), plus:
-  - `public static class TopicNames { Readings = "machine.readings"; Alarms = "machine.alarms"; CentralReadingsPattern = @"^plant\d+\.machine\.readings$"; CentralAlarmsPattern = @"^plant\d+\.machine\.alarms$"; }`
+  - `public static class TopicNames { Readings = "machine.readings"; Alarms = "machine.alarms"; CentralReadingsPattern = @"^plant[0-9]+\.machine\.readings$"; CentralAlarmsPattern = @"^plant[0-9]+\.machine\.alarms$"; }`
   - `public static class Json { public static JsonSerializerOptions Options { get; } }`: the options from `EventDrivenDesignJsonContext`, a source-generated context with `[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, UseStringEnumConverter = true)]` that registers every contract type.
   - API models in `ApiModels.cs` (the dashboard mirrors these in TypeScript):
     ```csharp

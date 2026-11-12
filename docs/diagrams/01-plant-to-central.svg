@@ -525,14 +525,14 @@
 <rect x="220" y="1576" width="220" height="76" rx="6" fill="#2d3142" stroke="rgba(45,49,66,0.30)" stroke-width="0.8" fill-opacity="0.03"/>
 <text x="230" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Readings loop</text>
 <text x="230" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-readings</text>
-<text x="230" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant\d+\.machine\.readings$</text>
+<text x="230" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.readings$</text>
 <text x="230" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤5,000 records or 200 ms</text>
 <text x="230" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">cap 1,000 rows/s</text>
 <rect x="456" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
 <rect x="456" y="1576" width="220" height="76" rx="6" fill="#2d3142" stroke="rgba(45,49,66,0.30)" stroke-width="0.8" fill-opacity="0.03"/>
 <text x="466" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Alarms loop</text>
 <text x="466" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-alarms</text>
-<text x="466" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant\d+\.machine\.alarms$</text>
+<text x="466" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.alarms$</text>
 <text x="466" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤100 records or 50 ms</text>
 <text x="466" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">never capped</text>
 <rect x="736" y="1504" width="480" height="160" rx="6" fill="#f5f5f5"/>
@@ -546,14 +546,14 @@
 <rect x="748" y="1576" width="220" height="76" rx="6" fill="#2d3142" stroke="rgba(45,49,66,0.30)" stroke-width="0.8" fill-opacity="0.03"/>
 <text x="758" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Readings loop</text>
 <text x="758" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-readings</text>
-<text x="758" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant\d+\.machine\.readings$</text>
+<text x="758" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.readings$</text>
 <text x="758" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤5,000 records or 200 ms</text>
 <text x="758" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">cap 1,000 rows/s</text>
 <rect x="984" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
 <rect x="984" y="1576" width="220" height="76" rx="6" fill="#2d3142" stroke="rgba(45,49,66,0.30)" stroke-width="0.8" fill-opacity="0.03"/>
 <text x="994" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Alarms loop</text>
 <text x="994" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-alarms</text>
-<text x="994" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant\d+\.machine\.alarms$</text>
+<text x="994" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.alarms$</text>
 <text x="994" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤100 records or 50 ms</text>
 <text x="994" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">never capped</text>
 <rect x="52" y="1720" width="1320" height="124" rx="6" fill="#f5f5f5"/>
