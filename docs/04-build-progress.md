@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13 done; Task 10b (alarms never stored) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 10b fixed (root cause: duplicate hosted-service registration) and under review. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -42,7 +42,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 11 | MirrorMaker 2, end-to-end check | Done (live: 500 machines → PostgreSQL, 0 gaps, 0 duplicate rows, redelivery absorbed; regex fixed to POSIX `[0-9]+`) | `7566fd9`, `18de8cb` | Clean after 1 fix round |
 | 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
 | 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
-| 10b | Fix: central alarms never stored (found live in Task 13; the `central-alarms` group never forms) | **In progress** | — | — |
+| 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | **Built; review running** (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Pending |
 | 14 | Dashboard | To do | — | — |
 | 15 | `drill.sh` | To do | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
@@ -84,6 +84,10 @@ The design decided, to be written into doc 02 (a new "Fault tolerance and zero d
 | R4 | No single point of failure elsewhere in the demo | API ×2 behind nginx `upstream` (passive health check). MirrorMaker 2 ×2 in dedicated mode with internal REST. Consumers are already ×2 in one group. `restart: on-failure` on every .NET service | Kill one API → the dashboard stays up. Kill one mm2 → mirroring continues |
 
 Production only, documented and not built (laptop memory): 3 brokers per site with RF 3 and min ISR 2; a PostgreSQL synchronous standby with automatic failover (Patroni); `transactional.id` zombie fencing on the gateways, with `isolation.level=read_committed` in MirrorMaker 2; rolling upgrades of each gateway pair (standby first, then switch over).
+
+### Must fix before the demo
+
+- Alarm latency shows slightly negative (-0.2 to -0.9 s): device time = tick + machine index × 10 ms can run ahead of `stored_at`. Clamp latency at 0 in the API's alarm view, or spread the offsets into the past.
 
 ## 6. Fallbacks (plan B for every risk)
 
