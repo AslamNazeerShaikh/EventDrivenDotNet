@@ -2,7 +2,7 @@
 
 Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 machines stream readings while the central server is down for hours, and nothing may be lost or duplicated. Five edge gateways buffer on disk, a plant Kafka cluster rides out the outage, MirrorMaker 2 copies to a central cluster, and PostgreSQL stores each reading exactly once through a unique `(machine_id, seq)` key. Everything runs on one laptop with Docker Compose, with failure drills and a dashboard that proves zero loss and zero duplicates per machine.
 
-![Plant to central: two-tier buffering](docs/diagrams/01-plant-to-central.svg)
+![Plant to central: every container, port and data store](docs/diagrams/01-plant-to-central.svg)
 
 | # | Document | What it holds |
 | --- | --- | --- |

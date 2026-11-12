@@ -88,7 +88,7 @@ Why the hybrid wins:
 
 ## 3. Architecture
 
-![Plant to central: two-tier buffering. Machines feed five edge gateways, which write to a plant Kafka cluster. MirrorMaker 2 at central copies over the WAN into a central Kafka cluster, and store writers insert into PostgreSQL with a unique key.](diagrams/01-plant-to-central.svg)
+![Plant to central, in detail: five shops of 100 machines feed five edge gateways (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, a control-room API and dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
 
 *Source: [01-plant-to-central.html](diagrams/01-plant-to-central.html)*
 
