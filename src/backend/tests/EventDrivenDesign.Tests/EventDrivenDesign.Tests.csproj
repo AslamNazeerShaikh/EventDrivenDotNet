@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
     <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />
