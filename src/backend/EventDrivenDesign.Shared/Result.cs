@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace EventDrivenDesign.Shared;
 
 public enum ErrorKind { Invalid, NotFound, Unavailable }
@@ -26,6 +28,13 @@ public readonly record struct Result<T>
     public bool IsSuccess => Error is null;
 
     public T Value => IsSuccess ? _value! : throw new InvalidOperationException($"Result failed: {Error!.Code}.");
+
+    // The synthesised PrintMembers would read Value, which throws on a failure.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append($"IsSuccess = {IsSuccess}, Error = {Error}");
+        return true;
+    }
 
     public static Result<T> Success(T value) => new() { _value = value };
 

@@ -42,6 +42,13 @@ public class ResultTests
     }
 
     [Fact]
+    public void ToString_does_not_throw_on_a_failure()
+    {
+        Result<int>.Failure(Boom).Invoking(r => r.ToString()).Should().NotThrow();
+        Result.Failure(Boom).Invoking(r => r.ToString()).Should().NotThrow();
+    }
+
+    [Fact]
     public void Match_takes_the_right_branch()
     {
         Result<int>.Success(7).Match(v => $"ok {v}", e => e.Code).Should().Be("ok 7");
