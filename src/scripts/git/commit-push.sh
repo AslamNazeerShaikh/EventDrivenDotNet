@@ -10,11 +10,12 @@
 #   - The subject follows Conventional Commits, e.g. "docs: update build progress".
 #   - Paths default to docs/04-build-progress.md. Only the given paths are
 #     staged, never `git add -A`, so another agent's work-in-progress is
-#     never swept in.
+#     never swept in. It refuses to run while anything is already staged.
 #   - Runs scan-private.sh on the outgoing commits before pushing.
 #   - Refuses to push to main or development; feature branches only.
 #
-# Exit codes:  0 committed (and pushed),  1 nothing to commit or scan failed,
+# Exit codes:  0 committed (and pushed),  1 nothing to commit, index already
+#              staged, or scan failed,
 #              2 usage error or protected branch.
 #
 # Examples:
@@ -22,7 +23,7 @@
 #   src/scripts/git/commit-push.sh "chore(scripts): add api probe" src/scripts/live/api.sh
 set -euo pipefail
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then sed -n '2,25p' "$0"; exit 0; fi
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then sed -n '2,23p' "$0"; exit 0; fi
 
 PUSH=1
 if [[ "$1" == "--no-push" ]]; then PUSH=0; shift; fi
@@ -41,6 +42,11 @@ esac
 # The versioned hooks format C# on commit and block unformatted pushes.
 "$ROOT/src/scripts/git/install-hooks.sh" --check || "$ROOT/src/scripts/git/install-hooks.sh"
 
+# `git commit` takes the whole index, so files someone else staged would ride along.
+if ! git diff --cached --quiet; then
+  echo "commit-push: files are already staged (another agent's work?); commit or unstage them first:" >&2
+  git diff --cached --name-only >&2; exit 1
+fi
 git add -- "${PATHS[@]}"
 if git diff --cached --quiet; then echo "commit-push: nothing staged in: ${PATHS[*]}" >&2; exit 1; fi
 
