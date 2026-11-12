@@ -2,6 +2,7 @@
   <Folder Name="/backend/">
     <Project Path="EventDrivenDesign.Contracts/EventDrivenDesign.Contracts.csproj" />
     <Project Path="EventDrivenDesign.Domain/EventDrivenDesign.Domain.csproj" />
+    <Project Path="EventDrivenDesign.Persistence/EventDrivenDesign.Persistence.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj" />
