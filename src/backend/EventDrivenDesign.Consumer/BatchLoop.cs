@@ -109,7 +109,9 @@ public sealed class BatchLoop<T>(
         {
             try
             {
-                parsed.Add(JsonSerializer.Deserialize<T>(r.Message.Value, Json.Options) ?? throw new JsonException("null payload"));
+                var item = JsonSerializer.Deserialize<T>(r.Message.Value, Json.Options) ?? throw new JsonException("null payload");
+                if (RecordValidation.Problem(item) is { } problem) throw new JsonException(problem);
+                parsed.Add(item);
             }
             catch (JsonException ex)
             {
