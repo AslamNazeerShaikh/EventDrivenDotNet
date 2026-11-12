@@ -232,7 +232,7 @@ public sealed record ConsumerMetrics(
 public sealed record ProcessStats(double CpuPercent, long WorkingSetBytes, long GcHeapBytes);
 ```
 
-`GatewayCommand` replaces `ProducerCommand`. It keeps the existing `$type` discriminator converter pattern and its contract test. `ServiceHealth` (`Healthy`, `Degraded`, `Down`) stays as it is.
+`GatewayCommand` replaces `ProducerCommand`. F1 and F2 re-introduce the `$type` discriminator converter with its contract test. `ServiceHealth` (`Healthy`, `Degraded`, `Down`) stays as it is.
 
 ---
 
