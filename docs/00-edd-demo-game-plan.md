@@ -389,8 +389,8 @@ MirrorMaker 2 keeps each record's partition, key, timestamp and headers, and the
 
 | # | Loop | Group | Subscription | Batch |
 | --- | --- | --- | --- | --- |
-| 1 | Readings | `central-readings` | `^plant\d+\.machine\.readings$` | Up to 5,000 records or 200 ms |
-| 2 | Alarms | `central-alarms` | `^plant\d+\.machine\.alarms$` | Up to 100 records or 50 ms |
+| 1 | Readings | `central-readings` | `^plant[0-9]+\.machine\.readings$` | Up to 5,000 records or 200 ms |
+| 2 | Alarms | `central-alarms` | `^plant[0-9]+\.machine\.alarms$` | Up to 100 records or 50 ms |
 
 | # | librdkafka setting | Value |
 | --- | --- | --- |

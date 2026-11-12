@@ -168,6 +168,25 @@ services:
       Gateway__Seed: "5000"
     volumes: [gateway-asm-data:/data]
 
+  mm2:
+    image: apache/kafka:4.4.0
+    command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/etc/mm2/mm2.properties"]
+    environment:
+      # connect-mirror-maker.sh defaults to a 2 GB heap
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx384m
+    volumes: [./kafka/mm2.properties:/etc/mm2/mm2.properties:ro]
+    depends_on:
+      plant-kafka:
+        condition: service_healthy
+      central-kafka:
+        condition: service_healthy
+      plant-topics:
+        condition: service_completed_successfully
+    mem_limit: 768m
+    memswap_limit: 768m
+    restart: on-failure
+    networks: [plant, central]
+
   consumer-1:
     <<: *consumer
     environment:

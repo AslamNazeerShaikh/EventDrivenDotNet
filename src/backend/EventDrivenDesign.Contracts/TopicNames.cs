@@ -4,6 +4,6 @@ public static class TopicNames
 {
     public const string Readings = "machine.readings";
     public const string Alarms = "machine.alarms";
-    public const string CentralReadingsPattern = @"^plant\d+\.machine\.readings$";
-    public const string CentralAlarmsPattern = @"^plant\d+\.machine\.alarms$";
+    public const string CentralReadingsPattern = @"^plant[0-9]+\.machine\.readings$";
+    public const string CentralAlarmsPattern = @"^plant[0-9]+\.machine\.alarms$";
 }
