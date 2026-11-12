@@ -115,7 +115,7 @@ Kafka has no Docker Official Image (`library/kafka` does not exist). The verifie
 
 ## 3. Containers, networks and memory
 
-![The demo on one laptop: Docker Compose runs a plant network, a central network and an ops network, with MirrorMaker 2 spanning plant and central.](diagrams/08-demo-deployment.svg)
+![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and ten gateways in five active/standby pairs), a central network (central Kafka, two consumers, PostgreSQL), two MirrorMaker 2 workers spanning plant and central, and an ops network for the two control-room APIs behind the dashboard's nginx and the dashboard.](diagrams/08-demo-deployment.svg)
 
 *Source: [08-demo-deployment.html](diagrams/08-demo-deployment.html)*
 

@@ -59,11 +59,11 @@
     <h1>The demo on one laptop: Docker Compose</h1>
 
     <!-- doc-wide 1280x720. Host frame x40-1240 y40-584. Plant network top-left, ops network top-right,
-         central network bottom; mm2 straddles the plant bottom border (y288) and the central top border (y336). -->
+         central network bottom; mm2-1 and mm2-2 straddle the plant bottom border (y288) and the central top border (y336). -->
     <div class="diagram-container">
       <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="08-demo-deployment-title 08-demo-deployment-desc">
         <title id="08-demo-deployment-title">The demo on one laptop: Docker Compose</title>
-        <desc id="08-demo-deployment-desc">Deployment diagram of the live demo on one MacBook: five gateways and the plant Kafka cluster on a plant network, MirrorMaker 2 attached to both the plant and central networks as the WAN link, central Kafka, two consumers and PostgreSQL on a central network, and the API and dashboard on an ops network, with a browser and a drill script running on the host.</desc>
+        <desc id="08-demo-deployment-desc">Deployment diagram of the live demo on one MacBook: ten gateways in five active/standby pairs and the plant Kafka cluster on a plant network, two MirrorMaker 2 workers attached to both the plant and central networks as the WAN link, central Kafka, two consumers and PostgreSQL on a central network, and two control-room APIs behind the dashboard's nginx on an ops network, with a browser and a drill script running on the host.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
@@ -107,10 +107,12 @@
         <line x1="748" y1="456" x2="796" y2="456" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
         <!-- browser -> dashboard -->
         <line x1="1096" y1="168" x2="1012" y2="168" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-        <!-- api reads into the plant and central networks -->
+        <!-- the dashboard's nginx proxies /api/ to the API pair -->
+        <line x1="850" y1="168" x2="814" y2="168" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <!-- the APIs read into the plant and central networks -->
         <line x1="612" y1="168" x2="544" y2="168" stroke="#2e5aa8" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow-link)"/>
         <line x1="772" y1="216" x2="772" y2="336" stroke="#2e5aa8" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow-link)"/>
-        <!-- drill.sh -> mm2 -->
+        <!-- drill.sh -> the mm2 workers -->
         <path d="M 178 424 V 320 Q 178 312 186 312 H 336" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
 
         <!-- Path labels -->
@@ -118,22 +120,24 @@
         <text x="1054" y="159" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">HTTP :3000</text>
         <rect x="560" y="150" width="36" height="12" rx="2" fill="#f5f5f5"/>
         <text x="578" y="159" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">READS</text>
+        <rect x="814" y="150" width="38" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="833" y="159" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">/api/</text>
         <rect x="780" y="270" width="36" height="12" rx="2" fill="#f5f5f5"/>
         <text x="798" y="279" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">READS</text>
         <rect x="224" y="294" width="64" height="12" rx="2" fill="#f5f5f5"/>
         <text x="256" y="303" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">DISCONNECT</text>
 
         <!-- ─── NODES ─── -->
-        <!-- gateway x5 (focal) -->
+        <!-- gateway x10: five active/standby pairs (focal) -->
         <rect x="88" y="120" width="200" height="96" rx="6" fill="#f5f5f5"/>
         <rect x="88" y="120" width="200" height="96" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
-        <rect x="252" y="128" width="28" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
-        <text x="266" y="137" fill="#bf4520" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">×5</text>
+        <rect x="250" y="128" width="30" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="265" y="137" fill="#bf4520" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">×10</text>
         <text x="188" y="148" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">gateway</text>
         <text x="188" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">EventDrivenDesign.Gateway</text>
-        <text x="188" y="177" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">256 MB each · SQLite volume</text>
-        <rect x="136" y="188" width="104" height="16" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
-        <text x="188" y="199" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">gateway-*-data</text>
+        <text x="188" y="177" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">five active/standby pairs</text>
+        <rect x="128" y="188" width="120" height="16" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+        <text x="188" y="199" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">gateway-*-{a,b}-data</text>
 
         <!-- plant-kafka -->
         <rect x="336" y="120" width="180" height="96" rx="6" fill="#f5f5f5"/>
@@ -143,12 +147,14 @@
         <rect x="368" y="184" width="116" height="16" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
         <text x="426" y="195" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">plant-kafka-data</text>
 
-        <!-- mm2 (focal): attached to the plant and central networks -->
+        <!-- mm2-1 and mm2-2 (focal): one Connect group across both, attached to the plant and central networks -->
         <rect x="336" y="264" width="180" height="96" rx="6" fill="#f5f5f5"/>
         <rect x="336" y="264" width="180" height="96" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
-        <text x="426" y="300" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">mm2</text>
-        <text x="426" y="316" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">MirrorMaker 2</text>
-        <text x="426" y="329" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">apache/kafka:4.4.0 · 768 MB</text>
+        <rect x="484" y="272" width="28" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="498" y="281" fill="#bf4520" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">×2</text>
+        <text x="426" y="300" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">mm2-1 · mm2-2</text>
+        <text x="426" y="316" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">MirrorMaker 2 · dedicated</text>
+        <text x="426" y="329" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">apache/kafka · 768 MB each</text>
 
         <!-- central-kafka -->
         <rect x="336" y="408" width="180" height="96" rx="6" fill="#f5f5f5"/>
@@ -175,11 +181,14 @@
         <rect x="840" y="472" width="112" height="16" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
         <text x="896" y="483" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">central-db-data</text>
 
-        <!-- api: on the ops network, also attached to plant and central -->
+        <!-- api-1 and api-2: on the ops network, also attached to plant and central, behind the dashboard's nginx -->
         <rect x="612" y="120" width="200" height="96" rx="6" fill="#f5f5f5"/>
         <rect x="612" y="120" width="200" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-        <text x="712" y="164" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">api</text>
-        <text x="712" y="180" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">EventDrivenDesign.Api · 256 MB</text>
+        <rect x="772" y="128" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="786" y="137" fill="#2d3142" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">×2</text>
+        <text x="712" y="158" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">api-1 · api-2</text>
+        <text x="712" y="174" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">EventDrivenDesign.Api</text>
+        <text x="712" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">256 MB each · behind nginx</text>
 
         <!-- dashboard -->
         <rect x="852" y="120" width="160" height="96" rx="6" fill="#f5f5f5"/>
@@ -214,7 +223,7 @@
         <text x="424" y="642" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Named volume</text>
         <rect x="532" y="634" width="20" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8" stroke-dasharray="3,2"/>
         <text x="560" y="642" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Docker network</text>
-        <text x="1240" y="642" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end">≈ 5.1 GB of memory limits in total</text>
+        <text x="1240" y="642" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end">≈ 7.3 GB of memory limits in total</text>
 
         <!-- Row 2: paths -->
         <line x1="40" y1="664" x2="64" y2="664" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -222,9 +231,9 @@
         <line x1="172" y1="664" x2="196" y2="664" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
         <text x="204" y="667" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">HTTP</text>
         <line x1="276" y1="664" x2="300" y2="664" stroke="#2e5aa8" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow-link)"/>
-        <text x="308" y="667" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">api reads gateway metrics (HTTP), both clusters' offsets, the database</text>
+        <text x="308" y="667" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">the APIs read gateway metrics (HTTP), both clusters' offsets, the database</text>
         <line x1="700" y1="664" x2="724" y2="664" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-        <text x="732" y="667" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Drill · disconnect mm2 from the plant network = WAN cut</text>
+        <text x="732" y="667" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Drill · disconnect mm2-1 and mm2-2 from the plant network = WAN cut</text>
       </svg>
     </div>
   </div>

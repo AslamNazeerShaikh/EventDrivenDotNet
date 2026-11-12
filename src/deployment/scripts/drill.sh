@@ -9,10 +9,10 @@ PROOF_TIMEOUT=300 # seconds
 usage() {
   cat >&2 <<USAGE
 usage: drill.sh <command>
-  central-down          kill mm2 + consumers, stop central db + kafka
-  central-up            start central kafka, db, consumers, mm2
-  wan-cut               disconnect mm2 from the plant network
-  wan-restore           reconnect mm2 to the plant network
+  central-down          kill mm2-1, mm2-2 + consumers, stop central db + kafka
+  central-up            start central kafka, db, consumers, mm2-1 and mm2-2
+  wan-cut               disconnect mm2-1 and mm2-2 from the plant network
+  wan-restore           reconnect mm2-1 and mm2-2 to the plant network
   plant-down            stop plant-kafka
   plant-up              start plant-kafka
   kill-gateway <SHOP>   kill the shop's active gateway, then start it
@@ -132,12 +132,16 @@ failover() { # $1 SHOP (any case) — drill 9: kill the active instance; the sta
 cmd=$1
 case $cmd in
   central-down)
-    run docker compose kill mm2 consumer-1 consumer-2
+    run docker compose kill mm2-1 mm2-2 consumer-1 consumer-2
     run docker compose stop central-db central-kafka ;;
   central-up)
-    run docker compose start central-kafka central-db consumer-1 consumer-2 mm2 ;;
-  wan-cut)     run docker network disconnect edd_plant edd-mm2-1 ;;
-  wan-restore) run docker network connect edd_plant edd-mm2-1 ;;
+    run docker compose start central-kafka central-db consumer-1 consumer-2 mm2-1 mm2-2 ;;
+  wan-cut)
+    run docker network disconnect edd_plant edd-mm2-1-1
+    run docker network disconnect edd_plant edd-mm2-2-1 ;;
+  wan-restore)
+    run docker network connect edd_plant edd-mm2-1-1
+    run docker network connect edd_plant edd-mm2-2-1 ;;
   plant-down)  run docker compose stop plant-kafka ;;
   plant-up)    run docker compose start plant-kafka ;;
   kill-gateway)

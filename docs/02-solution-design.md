@@ -475,7 +475,7 @@ After an outage, six hours of old readings arrive in a burst. If charts bucketed
 
 The panel sees the design run, not just described. The data path in sections 3 to 6 runs on one laptop with Docker Compose, simplified only as the first table below says. Every container runs a Docker Official Image or an image from a Verified Publisher, except Kafka. Kafka has no Docker Official Image, so the demo uses the Apache Kafka project's own `apache/kafka` image. The build details are in [doc 00](00-edd-demo-game-plan.md).
 
-![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and five gateways), a central network (central Kafka, two consumers, PostgreSQL), MirrorMaker 2 spanning both, and an ops network for the control-room API and dashboard.](diagrams/08-demo-deployment.svg)
+![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and ten gateways in five active/standby pairs), a central network (central Kafka, two consumers, PostgreSQL), two MirrorMaker 2 workers spanning both, and an ops network for the two control-room APIs behind the dashboard's nginx and the dashboard.](diagrams/08-demo-deployment.svg)
 
 *Source: [08-demo-deployment.html](diagrams/08-demo-deployment.html)*
 

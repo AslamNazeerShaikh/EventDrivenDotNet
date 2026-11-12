@@ -39,6 +39,49 @@ x-consumer: &consumer
   restart: on-failure
   networks: [central]
 
+x-api: &api
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: api
+  environment: &api-env
+    Api__Gateways: gateway-prs-a:8080,gateway-prs-b:8080,gateway-bdy-a:8080,gateway-bdy-b:8080,gateway-pnt-a:8080,gateway-pnt-b:8080,gateway-mch-a:8080,gateway-mch-b:8080,gateway-asm-a:8080,gateway-asm-b:8080
+    Api__Consumers: consumer-1:8080,consumer-2:8080
+    Kafka__Plant: plant-kafka:9092
+    Kafka__Central: central-kafka:9092
+    ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    plant-kafka:
+      condition: service_healthy
+    central-kafka:
+      condition: service_healthy
+    central-db:
+      condition: service_healthy
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  networks: [plant, central, ops]
+
+x-mm2: &mm2
+  image: apache/kafka:4.4.0
+  command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/etc/mm2/mm2.properties"]
+  environment:
+    # connect-mirror-maker.sh defaults to a 2 GB heap
+    KAFKA_HEAP_OPTS: -Xms128m -Xmx384m
+  volumes: [./kafka/mm2.properties:/etc/mm2/mm2.properties:ro]
+  depends_on:
+    plant-kafka:
+      condition: service_healthy
+    central-kafka:
+      condition: service_healthy
+    plant-topics:
+      condition: service_completed_successfully
+  mem_limit: 768m
+  memswap_limit: 768m
+  restart: on-failure
+  networks: [plant, central]
+
 services:
   plant-kafka:
     image: apache/kafka:4.4.0
@@ -218,24 +261,14 @@ services:
       Gateway__Seed: "5000"
     volumes: [gateway-asm-b-data:/data]
 
-  mm2:
-    image: apache/kafka:4.4.0
-    command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/etc/mm2/mm2.properties"]
-    environment:
-      # connect-mirror-maker.sh defaults to a 2 GB heap
-      KAFKA_HEAP_OPTS: -Xms128m -Xmx384m
-    volumes: [./kafka/mm2.properties:/etc/mm2/mm2.properties:ro]
-    depends_on:
-      plant-kafka:
-        condition: service_healthy
-      central-kafka:
-        condition: service_healthy
-      plant-topics:
-        condition: service_completed_successfully
-    mem_limit: 768m
-    memswap_limit: 768m
-    restart: on-failure
-    networks: [plant, central]
+  # two dedicated workers in dedicated mode: one Connect group on the central cluster's flow topics, tasks shared and taken over (KIP-710)
+  mm2-1:
+    <<: *mm2
+    hostname: mm2-1
+
+  mm2-2:
+    <<: *mm2
+    hostname: mm2-2
 
   consumer-1:
     <<: *consumer
@@ -249,29 +282,12 @@ services:
       <<: *consumer-env
       Consumer__Id: consumer-2
 
-  api:
-    build:
-      context: ..
-      dockerfile: deployment/Dockerfile
-      target: api
-    environment:
-      Api__Gateways: gateway-prs-a:8080,gateway-prs-b:8080,gateway-bdy-a:8080,gateway-bdy-b:8080,gateway-pnt-a:8080,gateway-pnt-b:8080,gateway-mch-a:8080,gateway-mch-b:8080,gateway-asm-a:8080,gateway-asm-b:8080
-      Api__Consumers: consumer-1:8080,consumer-2:8080
-      Kafka__Plant: plant-kafka:9092
-      Kafka__Central: central-kafka:9092
-      ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
-      ASPNETCORE_HTTP_PORTS: "8080"
-    depends_on:
-      plant-kafka:
-        condition: service_healthy
-      central-kafka:
-        condition: service_healthy
-      central-db:
-        condition: service_healthy
-    mem_limit: 256m
-    memswap_limit: 256m
-    restart: on-failure
-    networks: [plant, central, ops]
+  # two control-room APIs behind the dashboard's nginx; each polls every source and shares nothing, so either can answer alone
+  api-1:
+    <<: *api
+
+  api-2:
+    <<: *api
 
   dashboard:
     build:
@@ -280,7 +296,9 @@ services:
       target: dashboard
     ports: ["3000:80"]
     depends_on:
-      api:
+      api-1:
+        condition: service_started
+      api-2:
         condition: service_started
     mem_limit: 64m
     memswap_limit: 64m
