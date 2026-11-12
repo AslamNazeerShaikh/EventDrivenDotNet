@@ -51,9 +51,10 @@ public sealed class SenderTests : IAsyncLifetime
         using var producer = new ProducerBuilder<string, byte[]>(KafkaConfigs.Producer(bootstrap)).Build();
         var sender = new Sender(buffer, producer, "BDY", TimeProvider.System);
         using var cts = new CancellationTokenSource();
-        var run = sender.RunAsync(cts.Token);
 
+        // Pause first: otherwise a warm connection could acknowledge all 301 rows before the pause lands.
         await _kafka.PauseAsync(TestContext.Current.CancellationToken);
+        var run = sender.RunAsync(cts.Token);
         await Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         var buffered = buffer.Stats();
         (buffered.Readings + buffered.Alarms).Should().Be(301, "nothing is acknowledged while the broker is paused");

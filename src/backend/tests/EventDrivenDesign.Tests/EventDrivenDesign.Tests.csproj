@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\EventDrivenDesign.Messaging\EventDrivenDesign.Messaging.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Persistence\EventDrivenDesign.Persistence.csproj" />
     <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
