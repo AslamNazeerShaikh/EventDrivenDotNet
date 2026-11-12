@@ -50,7 +50,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 16 | Cold-start rehearsal, README | Done. Rehearsal PASS 184,700 = 184,700, 12,502 duplicates absorbed, cold start 12 s; README run section | `e8a272e`, `9289603` | Clean after 1 fix round |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 146 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings (after Task 13b). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: Tests on the branch: 146 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
 
 ## 4. Rulings so far
 

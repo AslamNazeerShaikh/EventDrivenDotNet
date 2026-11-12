@@ -79,8 +79,14 @@ public sealed class SenderTests : IDisposable
             .Produced.Should()
             .Be(5, "the sender waits out its backoff instead of retrying at once");
 
-        _time.Advance(TimeSpan.FromSeconds(31)); // beyond the 30 s backoff cap
-        await Until(() => sender.SendErrors >= 4);
+        // State turns Retrying just before the backoff timer is registered, so an advance can
+        // land too early and be lost. Advance (past the 30 s cap) until the retry starts.
+        await Until(() =>
+        {
+            if (producer.Produced == 5)
+                _time.Advance(TimeSpan.FromSeconds(31));
+            return sender.SendErrors >= 4;
+        });
         producer.Produced.Should().Be(7, "only the two failed rows are produced again");
         buffer.ReadOldest(10).Select(r => r.Seq).Should().Equal(3, 4);
 
