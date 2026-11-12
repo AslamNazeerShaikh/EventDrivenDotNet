@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:30 IST: Task 14b done; resilience tier design being written into docs 02, 00, 03.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:33 IST: resilience design written (d175d4d); spec review running.
 
 ## 1. Where things are
 
@@ -48,7 +48,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | Done. Rehearsal PASS 184,700 = 184,700, 12,502 duplicates absorbed, cold start 12 s; README run section | `e8a272e`, `9289603` | Clean after 1 fix round |
-| R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
+| R1–R4 | Resilience tier (section 5) | Written into docs 00/02/03 (`d175d4d`); spec review running before the build | `d175d4d` | Spec review pending |
 
 Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
 
@@ -109,7 +109,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** In order: (1) Resilience tier R1–R4 (section 5): the design is being written into docs 02, 00 and 03 (report `resilience-docs-report.md`); review it, then build R1 → R2 → R3, and R4, via SDD. (2) Final whole-branch review on Opus (deferred minors are in the ledger).
+3. **Right now:** In order: (1) Spec review of `d175d4d` (R1–R4 in docs 00/02/03; writer's report `resilience-docs-report.md`). (2) Build R1 → R2 → R3, and R4, via SDD from doc 03. (3) Final whole-branch review on Opus (deferred minors are in the ledger).
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
