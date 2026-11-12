@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 14 (dashboard) in fix round 2. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 14 done; Task 15 (`drill.sh`) in progress. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -43,12 +43,12 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
 | 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
 | 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | Done (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Clean |
-| 14 | Dashboard (+ the alarm-latency clamp as its own commit) | **Fix round 2 running** (round 1 done: MM2 health tile, on-demand duplicate check, live banner age, error boundary) | `225c837`, `626ed6d`, `15686b1` | Needs fixes: the proof verdict must always come from the live poll (stale PASS after Resume) |
-| 15 | `drill.sh` | To do | — | — |
+| 14 | Dashboard (+ the alarm-latency clamp as its own commit) | Done (live: green tiles, 500/s, outage hole, MM2 tile turns Degraded when lagging, banner on API loss, pause → PASS, Resume → WAIT at once) | `225c837`, `626ed6d`, `15686b1`, `44ef7e6` | Clean after 2 fix rounds |
+| 15 | `drill.sh` | **In progress** | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 143 unit, 13 integration and 23 frontend (`bun test`) tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: 143 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
 
 ## 4. Rulings so far
 
@@ -106,7 +106,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 14 is in fix round 2 (`15686b1`): the proof verdict always comes from the live poll, and the duplicate count shows only while paused and drained. If the result is lost, look for a commit after `15686b1`. If it exists, re-review `15686b1..HEAD` against the ledger finding; otherwise re-dispatch it. Then Task 15 (`drill.sh`, `task-15-brief.md`).
+3. **Right now:** Task 15 (`drill.sh`) is being built from `task-15-brief.md`, and the main story is run live (central down → up → proof PASS, then the crash drills). If the result is lost, check `git log` for `feat(deployment): add failure drills and the proof command`. If it exists, review it against the brief; otherwise re-dispatch it. Then Task 16 (cold-start rehearsal, README).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
