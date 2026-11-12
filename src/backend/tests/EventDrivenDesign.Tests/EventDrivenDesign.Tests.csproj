@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Gateway\EventDrivenDesign.Gateway.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Messaging\EventDrivenDesign.Messaging.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Persistence\EventDrivenDesign.Persistence.csproj" />
     <PackageReference Include="AwesomeAssertions" />
