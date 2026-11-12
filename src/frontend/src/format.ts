@@ -95,7 +95,7 @@ export function proofView(
 // A panel keeps its last data when its query fails. Before any success there is no such data to claim.
 export function panelNote(isError: boolean, hasData: boolean, reason: string | undefined): string | undefined {
   if (!isError) return undefined;
-  return hasData
-    ? "Not updating, showing the last data received."
-    : `No data yet. ${reason ?? "The API did not answer."} Retrying every second.`;
+  if (hasData) return "Not updating, showing the last data received.";
+  const why = reason ?? "The API did not answer.";
+  return `No data yet. ${/[.!?]$/.test(why) ? why : `${why}.`} Retrying every second.`;
 }

@@ -128,6 +128,8 @@ describe("panelNote", () => {
     expect(panelNote(true, false, "The central database did not answer.")).toBe(
       "No data yet. The central database did not answer. Retrying every second.",
     ));
+  test("error before any data, reason without a full stop", () =>
+    expect(panelNote(true, false, "Bad Gateway")).toBe("No data yet. Bad Gateway. Retrying every second."));
   test("error before any data, no reason", () =>
     expect(panelNote(true, false, undefined)).toBe("No data yet. The API did not answer. Retrying every second."));
 });
