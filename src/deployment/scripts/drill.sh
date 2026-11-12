@@ -27,13 +27,13 @@ USAGE
 run() { printf '\033[1m▶ %s\033[0m\n' "$*"; "$@"; }
 
 proof() {
-  run curl -fsS -X POST "$API/plant/pause"; echo
+  run curl -fsS --max-time 10 -X POST "$API/plant/pause"; echo
   local deadline=$((SECONDS + PROOF_TIMEOUT)) json="" drained=false
-  printf '▶ curl -fsS %s/reconciliation?full=true  (every 2 s, up to %s s, until drained)\n' "$API" "$PROOF_TIMEOUT"
+  printf '▶ curl -fsS --max-time 5 %s/reconciliation?full=true  (every 2 s, up to %s s, until drained)\n' "$API" "$PROOF_TIMEOUT"
   while ((SECONDS < deadline)); do
     # a failed poll (API restarting, 503) is retried, not fatal
-    if json=$(curl -fsS "$API/reconciliation?full=true" 2>/dev/null); then
-      drained=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["drained"]).lower())' <<<"$json")
+    if json=$(curl -fsS --max-time 5 "$API/reconciliation?full=true" 2>/dev/null); then
+      drained=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["drained"]).lower())' <<<"$json" 2>/dev/null) || drained=false
       [[ $drained == true ]] && break
     fi
     sleep 2
@@ -73,8 +73,8 @@ case $cmd in
     run docker compose kill "consumer-$2"
     echo "(waiting 10 s)"; sleep 10
     run docker compose start "consumer-$2" ;;
-  pause)  run curl -fsS -X POST "$API/plant/pause"; echo ;;
-  resume) run curl -fsS -X POST "$API/plant/resume"; echo ;;
+  pause)  run curl -fsS --max-time 10 -X POST "$API/plant/pause"; echo ;;
+  resume) run curl -fsS --max-time 10 -X POST "$API/plant/resume"; echo ;;
   proof)  proof ;;
   *) usage ;;
 esac
