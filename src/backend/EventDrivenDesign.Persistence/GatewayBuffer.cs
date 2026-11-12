@@ -25,6 +25,9 @@ public sealed record MachineState(
     long LastDeviceTimeMs
 );
 
+/// <summary>The newest position of one machine in the plant topics: what the log holds.</summary>
+public sealed record LogPosition(long LastSeq, long LastAlarmSeq, long LastDeviceTimeMs);
+
 public sealed record TickBatch(IReadOnlyList<OutboxRow> Rows, IReadOnlyList<MachineState> States);
 
 public sealed record BufferStats(
@@ -202,6 +205,99 @@ public sealed class GatewayBuffer : IAsyncDisposable
                 }
 
                 Exec(conn, "PRAGMA incremental_vacuum(256)");
+            },
+            ct
+        );
+
+    /// <summary>
+    /// Deletes rows the plant log already holds and folds the log's positions into machine_state, in one transaction.
+    /// The reading pair comes from the side that is further ahead; the alarm counter comes from the larger of the
+    /// two on its own. Never a maximum per field: the pair that numbers the next reading must stay together.
+    /// </summary>
+    public Task ReconcileAsync(
+        IReadOnlyDictionary<string, LogPosition> log,
+        CancellationToken ct
+    ) =>
+        Submit(
+            conn =>
+            {
+                var removed = new long[2];
+                using var tx = conn.BeginTransaction();
+                foreach (var (machine, position) in log)
+                {
+                    using (var delete = conn.CreateCommand())
+                    {
+                        delete.Transaction = tx;
+                        delete.CommandText = """
+                            DELETE FROM outbox
+                            WHERE machine_id = $m
+                              AND ((lane = 1 AND seq <= $s) OR (lane = 0 AND seq <= $a))
+                            RETURNING lane
+                            """;
+                        delete.Parameters.AddWithValue("$m", machine);
+                        delete.Parameters.AddWithValue("$s", position.LastSeq);
+                        delete.Parameters.AddWithValue("$a", position.LastAlarmSeq);
+                        using var r = delete.ExecuteReader();
+                        while (r.Read())
+                            removed[r.GetInt64(0)]++;
+                    }
+
+                    long lastSeq,
+                        lastAlarmSeq,
+                        lastDeviceTimeMs;
+                    using (var select = conn.CreateCommand())
+                    {
+                        select.Transaction = tx;
+                        select.CommandText =
+                            "SELECT last_seq, last_alarm_seq, last_device_time_ms FROM machine_state WHERE machine_id = $m";
+                        select.Parameters.AddWithValue("$m", machine);
+                        using var r = select.ExecuteReader();
+                        if (r.Read())
+                        {
+                            var localSeq = r.GetInt64(0);
+                            var localAlarm = r.GetInt64(1);
+                            var localTime = r.GetInt64(2);
+                            if (position.LastSeq > localSeq)
+                            {
+                                lastSeq = position.LastSeq;
+                                lastDeviceTimeMs = position.LastDeviceTimeMs;
+                            }
+                            else
+                            {
+                                lastSeq = localSeq;
+                                lastDeviceTimeMs = localTime;
+                            }
+
+                            lastAlarmSeq = Math.Max(localAlarm, position.LastAlarmSeq);
+                        }
+                        else
+                        {
+                            lastSeq = position.LastSeq;
+                            lastAlarmSeq = position.LastAlarmSeq;
+                            lastDeviceTimeMs = position.LastDeviceTimeMs;
+                        }
+                    }
+
+                    using var upsert = conn.CreateCommand();
+                    upsert.Transaction = tx;
+                    upsert.CommandText = """
+                        INSERT INTO machine_state (machine_id, last_seq, last_alarm_seq, last_device_time_ms)
+                        VALUES ($m, $s, $a, $t)
+                        ON CONFLICT (machine_id) DO UPDATE SET
+                          last_seq = excluded.last_seq,
+                          last_alarm_seq = excluded.last_alarm_seq,
+                          last_device_time_ms = excluded.last_device_time_ms
+                        """;
+                    upsert.Parameters.AddWithValue("$m", machine);
+                    upsert.Parameters.AddWithValue("$s", lastSeq);
+                    upsert.Parameters.AddWithValue("$a", lastAlarmSeq);
+                    upsert.Parameters.AddWithValue("$t", lastDeviceTimeMs);
+                    upsert.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+                Interlocked.Add(ref _counts[0], -removed[0]);
+                Interlocked.Add(ref _counts[1], -removed[1]);
             },
             ct
         );

@@ -16,6 +16,7 @@ usage: drill.sh <command>
   plant-down            stop plant-kafka
   plant-up              start plant-kafka
   kill-gateway <SHOP>   kill a gateway (PRS, BDY, PNT, MCH, ASM), then start it
+  lose-gateway-disk <SHOP>  recreate a gateway's disk, then start it: compose rm -sf, volume rm, up -d
   kill-consumer <N>     kill consumer 1 or 2, start it again after 10 s
   pause | resume        pause or resume the plant simulators
   proof                 pause, wait for the drain, print the reconciliation; exit 0 on PASS
@@ -68,6 +69,12 @@ case $cmd in
     case $shop in prs|bdy|pnt|mch|asm) ;; *) usage ;; esac # bash 3.2 (macOS): no ${var,,}
     run docker compose kill "gateway-$shop"
     run docker compose start "gateway-$shop" ;;
+  lose-gateway-disk)
+    shop=$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')
+    case $shop in prs|bdy|pnt|mch|asm) ;; *) usage ;; esac # bash 3.2 (macOS): no ${var,,}
+    run docker compose rm -sf "gateway-$shop"
+    run docker volume rm "edd_gateway-$shop-data"
+    run docker compose up -d "gateway-$shop" ;;
   kill-consumer)
     [[ ${2:-} =~ ^[12]$ ]] || usage
     run docker compose kill "consumer-$2"

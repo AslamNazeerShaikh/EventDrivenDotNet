@@ -29,6 +29,112 @@ public sealed class GatewayBufferTests : IDisposable
     ) => new(rows, [new MachineState(Machine, lastSeq, lastAlarmSeq, timeMs)]);
 
     [Fact]
+    public async Task Reconcile_drops_rows_the_log_already_holds()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var buffer = GatewayBuffer.Open(DbPath);
+        var rows = Enumerable.Range(48, 5).Select(s => Row(Lane.Reading, s, s * 100)).ToArray();
+        await buffer.WriteTickAsync(Tick(52, 0, 5200, rows), ct);
+
+        await buffer.ReconcileAsync(
+            new Dictionary<string, LogPosition> { [Machine] = new(50, 0, 5_000) },
+            ct
+        );
+
+        buffer.ReadOldest(10).Select(r => r.Seq).Should().Equal(51L, 52L);
+        buffer.LoadState()[Machine].Should().Be(new MachineState(Machine, 52, 0, 5_200));
+        buffer.Stats().Readings.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Reconcile_takes_the_log_when_it_is_ahead()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var buffer = GatewayBuffer.Open(DbPath);
+        await buffer.WriteTickAsync(
+            Tick(52, 0, 5_200, Row(Lane.Reading, 51, 5_100), Row(Lane.Reading, 52, 5_200)),
+            ct
+        );
+
+        await buffer.ReconcileAsync(
+            new Dictionary<string, LogPosition> { [Machine] = new(200, 3, 9_000) },
+            ct
+        );
+
+        buffer.ReadOldest(10).Should().BeEmpty();
+        buffer.LoadState()[Machine].Should().Be(new MachineState(Machine, 200, 3, 9_000));
+        buffer.Stats().Readings.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Reconcile_takes_each_lane_from_its_further_side()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var buffer = GatewayBuffer.Open(DbPath);
+        await buffer.WriteTickAsync(
+            Tick(52, 1, 5_200, Row(Lane.Reading, 51, 5_100), Row(Lane.Reading, 52, 5_200)),
+            ct
+        );
+
+        await buffer.ReconcileAsync(
+            new Dictionary<string, LogPosition> { [Machine] = new(50, 3, 9_000) },
+            ct
+        );
+
+        buffer.ReadOldest(10).Select(r => r.Seq).Should().Equal(51L, 52L);
+        buffer.LoadState()[Machine].Should().Be(new MachineState(Machine, 52, 3, 5_200));
+    }
+
+    [Fact]
+    public async Task Reconcile_keeps_alarms_the_log_lacks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var buffer = GatewayBuffer.Open(DbPath);
+        await buffer.WriteTickAsync(
+            Tick(0, 2, 1_400, Row(Lane.Alarm, 1, 1_100), Row(Lane.Alarm, 2, 1_400)),
+            ct
+        );
+
+        await buffer.ReconcileAsync(
+            new Dictionary<string, LogPosition> { [Machine] = new(0, 1, 900) },
+            ct
+        );
+
+        buffer.ReadOldest(10).Select(r => (r.Lane, r.Seq)).Should().Equal((Lane.Alarm, 2L));
+        buffer.LoadState()[Machine].LastAlarmSeq.Should().Be(2);
+        buffer.Stats().Alarms.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Reconcile_on_a_new_file_writes_the_log_state()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var buffer = GatewayBuffer.Open(DbPath);
+
+        await buffer.ReconcileAsync(
+            new Dictionary<string, LogPosition>
+            {
+                ["P1-BDY-W042"] = new(50, 3, 50_000),
+                ["P1-BDY-W001"] = new(12, 0, 12_000),
+            },
+            ct
+        );
+
+        buffer
+            .LoadState()
+            .Should()
+            .BeEquivalentTo(
+                new Dictionary<string, MachineState>
+                {
+                    ["P1-BDY-W042"] = new("P1-BDY-W042", 50, 3, 50_000),
+                    ["P1-BDY-W001"] = new("P1-BDY-W001", 12, 0, 12_000),
+                }
+            );
+        buffer.Stats().Readings.Should().Be(0);
+        buffer.Stats().Alarms.Should().Be(0);
+    }
+
+    [Fact]
     public async Task New_file_uses_wal_full_and_incremental_vacuum()
     {
         await using (var buffer = GatewayBuffer.Open(DbPath))

@@ -50,6 +50,16 @@ builder.Services.AddHostedService(sp => new CollectorService(
 ));
 
 var app = builder.Build();
+var buffer = app.Services.GetRequiredService<GatewayBuffer>();
+if (buffer.IsNew)
+    // Until the plant cluster answers, the gateway numbers nothing (doc 02 §4.3).
+    await PlantLogReader.ReconcileBufferAsync(
+        buffer,
+        bootstrap,
+        [.. MachineCatalog.ForShop(plant, shop).Select(m => m.MachineId)],
+        app.Logger,
+        CancellationToken.None
+    );
 app.UseGlobalExceptionHandling();
 
 app.MapGet("/healthz", () => Results.Ok());
