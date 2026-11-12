@@ -95,14 +95,14 @@ Why the hybrid wins:
 | # | Component | Where it runs | Job | Production sizing | In the demo |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Machines | Plant floor | Produce readings and alarms | 500 | Simulated inside the gateways |
-| 2 | Edge gateways | Plant, one per shop | Collect, sequence, buffer on disk, forward | Five industrial PCs with SSDs, each with a standby | Five containers, 100 machines each |
+| 2 | Edge gateways | Plant, one per shop | Collect, sequence, buffer on disk, forward | Five industrial PCs with SSDs, each with a standby | Five active/standby pairs (ten containers), 100 machines per shop |
 | 3 | Plant Kafka cluster | Plant server room | Durable plant-side log and seven-day buffer | Three brokers (KRaft mode), replication factor 3, `min.insync.replicas=2` | One broker |
 | 4 | Plant operations view | Plant | Local alarms and live status | Grafana at the plant | A dashboard panel |
-| 5 | MirrorMaker 2 | Central | Copy plant topics to central | Two or more workers in dedicated mode | One container |
+| 5 | MirrorMaker 2 | Central | Copy plant topics to central | Two or more workers in dedicated mode | Two containers in dedicated mode |
 | 6 | Central Kafka cluster | Central | Central replay log | Three brokers, replication factor 3 | One broker |
 | 7 | Store writers | Central | Batch insert, deduplicate, commit offsets | One consumer group, up to one instance per partition | Two containers |
 | 8 | Central database | Central | Store of record | PostgreSQL partitioned by day, or TimescaleDB | PostgreSQL 18 |
-| 9 | Monitoring | Both sites | Metrics and alerts | Prometheus, Alertmanager and Grafana at each site | Control-room API and dashboard |
+| 9 | Monitoring | Both sites | Metrics and alerts | Prometheus, Alertmanager and Grafana at each site | Control-room API (two instances) and dashboard |
 
 ### Topics
 
@@ -218,13 +218,58 @@ The buffer is a transactional outbox: the reading, its sequence number and the m
 When a gateway restarts, it recovers in four steps:
 
 1. Open the SQLite file. Unacknowledged rows are still there.
-2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap. If the file is new (a replaced disk or a standby gateway), rebuild `machine_state` from the plant log first: the newest reading and alarm for each of its machines in the plant topics give the last sequence numbers and device time. Until the plant cluster answers, the gateway numbers nothing, because a number it cannot place could collide with a stored reading.
+2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap. If the file is new (a replaced disk), or the gateway is taking over from its partner, reconcile `machine_state` with the plant log first: the newest reading and alarm for each of its machines in the plant topics give the last sequence numbers and device time. Until the plant cluster answers, the gateway numbers nothing, because a number it cannot place could collide with a stored reading.
 3. Backfill the seconds it missed from each machine's history (OPC UA HistoryRead), up to the history depth. Anything older is recorded as an explicit gap.
 4. Start the sender. If a backlog exists, the sender starts in its catch-up state.
 
 ![Gateway sender states: Starting, Sending, Catching up, Retrying and Stopping, with the conditions that move between them. No state deletes a row without a broker acknowledgement.](diagrams/06-sender-states.svg)
 
 *Source: [06-sender-states.html](diagrams/06-sender-states.html)*
+
+#### Fault tolerance and zero downtime
+
+Absolute zero downtime is not possible across a network: processes die, links drop, and a switch-over takes seconds. So the target is stated in a form that can be checked:
+
+1. **No single point of failure.** Every component has a backup that takes over without an operator.
+2. **Zero data loss.** Every failure path ends in a resend or a re-read, never a drop (sections 4.1 and 4.10).
+3. **Failover in seconds.** A gateway's standby takes over within 15 seconds, and every other backup within a minute at most. The table below says how long each one takes.
+4. **Component downtime never becomes data downtime.** The seconds a gateway misses while it switches over are re-read from the machines' own history, so the data has no hole even when a process had one.
+
+| # | Component | Backup | How it fails over | Time to take over | In the demo |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Edge gateway | An active/standby pair per shop, each with its own disk | A lease in the plant cluster makes exactly one instance active. When the active one goes silent, the standby is granted the lease | Under 15 s | `gateway-<shop>-a` and `-b`; the `failover` drill |
+| 2 | Plant Kafka | Three brokers, replication factor 3, `min.insync.replicas=2` | A surviving broker becomes the partition leader | Seconds | One broker (production only) |
+| 3 | MirrorMaker 2 | Two workers in dedicated mode, in one group | The surviving worker takes the dead worker's tasks and resumes from the saved offsets | About 20 s (a 10 s worker session, then a 10 s rebalance delay) | `mm2-1` and `mm2-2` |
+| 4 | Central Kafka | Three brokers, replication factor 3 | As row 2 | Seconds | One broker (production only) |
+| 5 | Store writers | Two consumers in one group | The group rebalances; the uncommitted batch is redelivered and the key absorbs it | Under a minute (the consumer session timeout) | `consumer-1` and `consumer-2` |
+| 6 | Central database | A synchronous standby with automatic failover (Patroni) | The standby is promoted; store writers retry and commit no offsets meanwhile | Tens of seconds | One PostgreSQL (production only) |
+| 7 | Control-room API | Two instances behind nginx | nginx sends a request to the other instance when one refuses or times out | The next request | `api-1` and `api-2` |
+| 8 | Any process | A restart policy (Compose here, systemd or Kubernetes in production) | The process restarts and recovers from its own disk | Seconds | `restart: on-failure` on every .NET service |
+
+How the gateway lease works:
+
+1. Each shop has a Kafka topic `gateway.lease.<shop>` with one partition, which nobody writes to. Both instances of the pair join the consumer group `gateway-lease-<shop>`. Kafka gives the one partition to exactly one member. That member is active; the other is the standby.
+2. Each instance is a static member (`group.instance.id` is its name), with `session.timeout.ms=6000` and `heartbeat.interval.ms=2000`. An instance that restarts within 6 s keeps the lease. One that stays silent for 6 s loses it, and the standby is granted it.
+3. On assignment, the new active instance reconciles its buffer with the plant log: it deletes local rows the log already holds and keeps the higher sequence state for each machine. It then backfills the seconds since each machine's last reading from machine history, up to the history depth, and only then starts the collector and the sender.
+4. On revocation, it stops both at once. Unacknowledged rows stay on its disk. Its next reconcile drops the ones the log already holds and sends the rest.
+5. While the plant cluster is unreachable, nobody can be granted the lease, so the lease does not move. The active instance keeps collecting into its disk buffer (section 4.2, tier 1). The standby could not take over safely anyway, because it cannot read the log to learn where numbering stands.
+
+Why a takeover creates no loss and no duplicate rows: the new active instance continues each machine's numbering from the plant log, and it re-reads the seconds it missed from machine history. If both instances numbered the same second, it is the same sample with the same sequence number, and the database key keeps one copy.
+
+Why the lease lives in Kafka: the gateways already depend on the plant cluster, which is replicated. A lease there adds no coordinator to run (no ZooKeeper, etcd or virtual IP), and the cluster that stores the data also decides who may write it.
+
+The limit, stated plainly: if a gateway crashes while the whole plant cluster is down, neither instance can be granted the lease until the cluster returns, so nothing collects in between. When it returns, the active instance backfills up to the history depth and records anything older as a `DataGap` alarm, so the loss is explicit. It takes two failures at once, and with three brokers a whole-cluster outage is itself rare.
+
+The demo proves the gateway failover with `drill.sh failover BDY` ([doc 00 §10](00-edd-demo-game-plan.md#10-failure-drills)): it kills the Body shop's active gateway, the standby takes over within 15 s, and the proof still shows PASS with 0 gaps.
+
+Production only, documented and not built, to fit a laptop's memory:
+
+| # | Measure | What it adds |
+| --- | --- | --- |
+| 1 | Three brokers per site, replication factor 3, `min.insync.replicas=2` | Losing a broker loses no acknowledged write and stops nothing |
+| 2 | A PostgreSQL synchronous standby with automatic failover (Patroni) | The store of record survives losing its server |
+| 3 | `transactional.id` zombie fencing on the gateways, with `isolation.level=read_committed` in MirrorMaker 2 | Both instances of a pair use one `transactional.id`. When the new active instance starts its producer, the broker fences the old one, so a gateway that was cut off and comes back cannot write. MirrorMaker 2 never copies an aborted write |
+| 4 | Rolling upgrades of each gateway pair: upgrade the standby, switch over, then upgrade the other | Upgrades with no gap in collection |
 
 ### 4.4 Role of the Kafka-like component
 
@@ -349,8 +394,8 @@ Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plan
 | 2 | WAN link down | MirrorMaker 2 connection errors; mirror lag | Same as 1 | Same as 1 | No |
 | 3 | One plant broker fails | Under-replicated partitions | Leaders move to the remaining brokers; writes continue with 2 of 3 replicas | Replace the broker; it re-syncs | No |
 | 4 | Whole plant cluster down | Gateway send errors; buffer depth and oldest-age alerts | Gateways buffer on disk (24 hours of capacity) | Gateways drain when the cluster returns, alarms first | No |
-| 5 | Gateway process crash or reboot | Machine-silence and gateway-health alerts | Committed rows are safe on disk | Restart, resume sequences, backfill from machine history, resend | No; resends become duplicates and are absorbed |
-| 6 | Gateway disk or hardware failure | Gateway health | Its unsent rows are lost with the disk | The standby takes over once the failed gateway is fenced off, rebuilds its sequence state from the plant log, and re-reads machine history within its depth | Only beyond the history depth, and then reported as an explicit gap |
+| 5 | Gateway process crash or reboot | Machine-silence and gateway-health alerts | Committed rows are safe on its disk. A restart within 6 s keeps the lease; otherwise the standby is granted it within 15 s (section 4.3, "Fault tolerance and zero downtime") | The active instance reconciles with the plant log, backfills the missed seconds from machine history, and resends; the other instance stays or becomes the standby | No; resends become duplicates and are absorbed |
+| 6 | Gateway disk or hardware failure | Gateway-health alerts; the lease expires after 6 s | Its unsent rows are lost with the disk | The standby takes the lease, reconciles its sequence state with the plant log, and re-reads machine history within its depth. The repaired instance rejoins as the standby | Only beyond the history depth, and then reported as an explicit gap |
 | 7 | Store writer crash mid-batch | Consumer group rebalance | Uncommitted offsets are redelivered | Another instance takes the partitions | No; repeats are absorbed |
 | 8 | Database down or failing over | Store-writer errors; lag | Store writers retry and do not commit offsets | Resume after failover | No |
 | 9 | A malformed record | Parse failure | The record goes to a `rejected_records` table with its partition and offset, in the same transaction | Fix and replay from that table | No; it is quarantined, not dropped |

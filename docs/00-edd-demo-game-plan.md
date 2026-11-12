@@ -36,10 +36,10 @@ The demo simulates 500 machines in five shops. Each shop's edge gateway buffers 
 | # | Area | Decision |
 | --- | --- | --- |
 | 1 | Topology | Two single-broker Kafka 4.4 clusters, one for the plant and one for central, joined by MirrorMaker 2 |
-| 2 | Edge | Five gateway containers, one per shop, each simulating 100 machines at 1 reading per second, with a SQLite store-and-forward buffer on a named volume |
+| 2 | Edge | Five shop gateways, each an active/standby pair of containers sharing a Kafka lease. The active one simulates the shop's 100 machines at 1 reading per second, with a SQLite store-and-forward buffer on its own named volume |
 | 3 | Central store | PostgreSQL 18; primary key `(machine_id, seq)`; `INSERT … ON CONFLICT DO NOTHING` |
 | 4 | Delivery | At-least-once on every hop; the database key is the only deduplication point |
-| 5 | Packaging | Docker Compose: 14 containers on three networks, about 5.1 GB of memory limits |
+| 5 | Packaging | Docker Compose: 21 containers on three networks, about 7.3 GB of memory limits (14 containers and 5.1 GB before the resilience tier) |
 | 6 | Images | Docker Official Images or Verified Publisher images only, except `apache/kafka` (Kafka has no Docker Official Image) |
 | 7 | Runtime and language | .NET 11 and C# 15; `EventDrivenDesign.*` projects only |
 | 8 | Dashboard | React 19, Vite 8, TypeScript 7 and Tailwind 4, built with Bun and served by nginx on `:3000` |
@@ -119,19 +119,28 @@ Kafka has no Docker Official Image (`library/kafka` does not exist). The verifie
 
 *Source: [08-demo-deployment.html](diagrams/08-demo-deployment.html)*
 
-| # | Service | Image or project | Networks | Memory limit | Volume | Host port |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | `plant-kafka` | `apache/kafka:4.4.0` | plant | 1 GB | `plant-kafka-data` | 19092 |
-| 2 | `plant-topics` | `apache/kafka:4.4.0`, one-shot | plant | 512 MB (exits) | — | — |
-| 3–7 | `gateway-prs`, `gateway-bdy`, `gateway-pnt`, `gateway-mch`, `gateway-asm` | `EventDrivenDesign.Gateway` | plant | 256 MB each | `gateway-<shop>-data` | — |
-| 8 | `mm2` | `apache/kafka:4.4.0` running `connect-mirror-maker.sh` | plant, central | 768 MB | — | — |
-| 9 | `central-kafka` | `apache/kafka:4.4.0` | central | 1 GB | `central-kafka-data` | 29092 |
-| 10 | `central-db` | `postgres:18.6-alpine` | central | 256 MB | `central-db-data` | 55432 |
-| 11–12 | `consumer-1`, `consumer-2` | `EventDrivenDesign.Consumer` | central | 256 MB each | — | — |
-| 13 | `api` | `EventDrivenDesign.Api` | plant, central, ops | 256 MB | — | — |
-| 14 | `dashboard` | `nginx:1.30-alpine-slim` with the React build | ops | 64 MB | — | 3000 |
+The table shows the stack once the resilience tier is built (doc 02 §4.3, "Fault tolerance and zero downtime"; doc 03 tasks R1–R4). The column "Tier" says which task adds a container. Before R3 each shop has one gateway, `gateway-<shop>`; before R4 there is one `mm2` and one `api`.
 
-The running total is about 5.1 GB of limits. Set Docker Desktop's memory to 10 GB so containers can never eat into the 20 GB the host needs for its own work.
+| # | Service | Image or project | Networks | Memory limit | Volume | Host port | Tier |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `plant-kafka` | `apache/kafka:4.4.0` | plant | 1 GB | `plant-kafka-data` | 19092 | Must |
+| 2 | `plant-topics` | `apache/kafka:4.4.0`, one-shot | plant | 512 MB (exits) | — | — | Must |
+| 3–12 | `gateway-prs-a`, `gateway-prs-b`, `gateway-bdy-a`, `gateway-bdy-b`, `gateway-pnt-a`, `gateway-pnt-b`, `gateway-mch-a`, `gateway-mch-b`, `gateway-asm-a`, `gateway-asm-b`: one active/standby pair per shop | `EventDrivenDesign.Gateway` | plant | 256 MB each | `gateway-<shop>-a-data`, `gateway-<shop>-b-data` | — | Must (five), R3 (the other five) |
+| 13–14 | `mm2-1`, `mm2-2`: one MirrorMaker 2 group in dedicated mode | `apache/kafka:4.4.0` running `connect-mirror-maker.sh` | plant, central | 768 MB each | — | — | Must (one), R4 (the second) |
+| 15 | `central-kafka` | `apache/kafka:4.4.0` | central | 1 GB | `central-kafka-data` | 29092 | Must |
+| 16 | `central-db` | `postgres:18.6-alpine` | central | 256 MB | `central-db-data` | 55432 | Must |
+| 17–18 | `consumer-1`, `consumer-2` | `EventDrivenDesign.Consumer` | central | 256 MB each | — | — | Must |
+| 19–20 | `api-1`, `api-2`: behind the dashboard's nginx | `EventDrivenDesign.Api` | plant, central, ops | 256 MB each | — | — | Must (one), R4 (the second) |
+| 21 | `dashboard` | `nginx:1.30-alpine-slim` with the React build | ops | 64 MB | — | 3000 | Must |
+
+| # | Stage | Containers | Running total of limits |
+| --- | --- | --- | --- |
+| 1 | Must tier | 14 | About 5.1 GB (5,184 MB) |
+| 2 | R3: five standby gateways | +5 | +1,280 MB |
+| 3 | R4: a second API and a second MirrorMaker 2 worker | +2 | +1,024 MB (256 + 768) |
+| 4 | Whole stack | 21 | About 7.3 GB (7,488 MB) |
+
+The one-shot `plant-topics` is not in the totals, because it exits before the rest starts. Set Docker Desktop's memory to 10 GB so containers can never eat into the 20 GB the host needs for its own work. Under memory pressure, stop the five standby gateways first: the plant keeps running on the active ones.
 
 Memory settings that keep each container inside its limit:
 
@@ -145,7 +154,7 @@ Memory settings that keep each container inside its limit:
 | 6 | PostgreSQL | `-c shared_buffers=64MB -c max_connections=20` | Defaults assume a whole machine |
 | 7 | Every service | `memswap_limit` equal to `mem_limit` | No swap; a container that exceeds its limit fails visibly (exit 137, `OOMKilled=true`) |
 
-Start order uses `depends_on` with health checks: `plant-kafka` and `central-kafka` report healthy (`kafka-broker-api-versions.sh`), and `central-db` reports healthy (`pg_isready`). Then `plant-topics` runs once and exits, and the gateways, `mm2`, consumers and `api` start. librdkafka reconnects on its own, so the .NET services need no health checks of their own. The API watches them.
+Start order uses `depends_on` with health checks: `plant-kafka` and `central-kafka` report healthy (`kafka-broker-api-versions.sh`), and `central-db` reports healthy (`pg_isready`). Then `plant-topics` runs once and exits, and the gateways, the MirrorMaker 2 workers, the consumers and the APIs start. librdkafka reconnects on its own, so the .NET services need no health checks of their own. The API watches them.
 
 The broker environment is shown for `plant-kafka`; `central-kafka` is the same with its own names and ports:
 
@@ -186,8 +195,9 @@ PostgreSQL 18 keeps its data under a version-specific directory, so mount the vo
 | 2 | `machine.alarms` | plant | 3 | 3 h | Gateways | MirrorMaker 2, API (plant alarms view) |
 | 3 | `plant1.machine.readings` | central | 12 | 3 h (copied from the source by MirrorMaker 2) | MirrorMaker 2 | Consumers (group `central-readings`), API (central tail) |
 | 4 | `plant1.machine.alarms` | central | 3 | 3 h | MirrorMaker 2 | Consumers (group `central-alarms`) |
+| 5 | `gateway.lease.<shop>` (`prs`, `bdy`, `pnt`, `mch`, `asm`; R3) | plant | 1 | 3 h | Nobody: it holds no data | The shop's gateway pair (group `gateway-lease-<shop>`): the member assigned its one partition is active |
 
-`plant-topics` creates topics 1 and 2 with `--if-not-exists`. MirrorMaker 2 creates topics 3 and 4 and its own internal topics on the central cluster. Three hours of retention covers the longest drill many times over: 500 records/s × about 250 B is about 450 MB per hour.
+`plant-topics` creates topics 1, 2 and 5 with `--if-not-exists`. MirrorMaker 2 creates topics 3 and 4 and its own internal topics on the central cluster. Three hours of retention covers the longest drill many times over: 500 records/s × about 250 B is about 450 MB per hour.
 
 Record headers follow CloudEvents binary mode (doc 02 §3). The gateway builds the headers at send time from the buffer row, so they are never stored:
 
@@ -224,7 +234,8 @@ public sealed record GatewayMetrics(
     string GatewayId, string Shop, string State, bool Paused, int Machines,
     long Generated, long BufferedReadings, long BufferedAlarms, long OldestUnsentAgeMs,
     double SentPerSecond, long SendErrors, long BufferBytes,
-    IReadOnlyDictionary<string, long> LastSeqByMachine, ProcessStats Process);
+    IReadOnlyDictionary<string, long> LastSeqByMachine, ProcessStats Process,
+    string Role);  // R3: "active" or "standby"; GatewayId is the instance, e.g. gateway-bdy-a
 
 public sealed record ConsumerMetrics(
     string ConsumerId, int[] AssignedPartitions, double ConsumedPerSecond,
@@ -284,7 +295,7 @@ Machine IDs are `P1-{SHOP}-{type letter}{nnn}`, numbered 001 to 100 within each 
 - **Faults.** Random faults occur at `Gateway__FaultsPerMinute` (default 0.5 per gateway), or on demand with `InjectFault`. A fault pushes the machine's relevant signal past its threshold for 10 ticks. When the signal crosses the threshold on the way up, the collector emits one `MachineAlarm` with the machine's next `alarm_seq`.
 - **One transaction per tick.** The tick's readings, any alarms and the updated `machine_state` rows go into the buffer as one SQLite transaction.
 - **Backfill on restart.** For each machine, the collector regenerates the seconds it missed since `last_device_time_ms` with their original device times, up to `Gateway__HistoryDepthSeconds` (default 600). This emulates re-reading the machine controller's history. A larger gap produces one `DataGap` alarm covering the missing range, so the loss is explicit. Backfill commits in chunks of 60 seconds.
-- **Rebuild on a new file.** If the buffer file is new (`machine_state` is empty), the gateway reads the plant topics before its first tick. For each of its 100 machines, the newest reading gives `last_seq` and `last_device_time_ms`, and the newest alarm gives `last_alarm_seq`. It scans each partition backwards from the end in doubling chunks until every machine is found or the log start is reached; a machine with no record starts at 1. While plant Kafka is unreachable it retries and numbers nothing. Doc 02 §4.3 says why.
+- **Rebuild on a new file.** If the buffer file is new (`machine_state` is empty), the gateway reads the plant topics before its first tick. For each of its 100 machines, the newest reading gives `last_seq` and `last_device_time_ms`, and the newest alarm gives `last_alarm_seq`. It scans each partition backwards from the end in doubling chunks until every machine is found or the log start is reached; a machine with no record starts at 1. While plant Kafka is unreachable it retries and numbers nothing. Doc 02 §4.3 says why. In a pair (R3), the same reconcile, then the backfill, runs every time an instance is granted the lease, because its partner may have numbered further.
 - **Pause.** Pause stops the tick but not the sender. The paused flag is persisted, so a restart while paused stays paused and never backfills the paused time.
 
 ### Buffer
@@ -341,8 +352,9 @@ loop:
 | 6 | `Kafka__BootstrapServers` | `plant-kafka:9092` |
 | 7 | `Buffer__Path` | `/data/buffer.db` |
 | 8 | `ASPNETCORE_HTTP_PORTS` | `8080` |
+| 9 | `Gateway__Instance` | `gateway-bdy-a` (R3): the Compose service name. It is the lease's `group.instance.id` and the `GatewayId` in `/metrics` |
 
-Compose declares the five gateways once with a YAML anchor and overrides `Gateway__Shop`, `Gateway__Seed` and the volume for each.
+Compose declares the gateways once with a YAML anchor and overrides `Gateway__Shop`, `Gateway__Instance`, `Gateway__Seed` and the volume for each. After R3 there are ten, `gateway-<shop>-a` and `gateway-<shop>-b`. Both instances of a shop get the shop's seed, because both read the same machines.
 
 ---
 
@@ -378,9 +390,14 @@ config.storage.replication.factor = 1
 
 # never skip a record silently (this is the default; stated so nobody changes it)
 errors.tolerance = none
+
+# R4: two dedicated workers. They forward task configs to the leader over internal REST (KIP-710)
+dedicated.mode.enable.internal.rest = true
+# hand a dead worker's tasks to the survivor after 10 s, not Connect's default 5 minutes
+plant1->central.scheduled.rebalance.max.delay.ms = 10000
 ```
 
-MirrorMaker 2 keeps each record's partition, key, timestamp and headers, and the default replication policy adds the `plant1.` prefix. It is at-least-once: after a restart it copies again from its last saved source offset, and the database key absorbs the repeats. In production, add `replication.factor = 3` and run two or more workers.
+MirrorMaker 2 keeps each record's partition, key, timestamp and headers, and the default replication policy adds the `plant1.` prefix. It is at-least-once: after a restart it copies again from its last saved source offset, and the database key absorbs the repeats. The demo runs two workers, `mm2-1` and `mm2-2` (R4), with the same file. They form one group through the flow's internal topics on the central cluster and share its tasks. Each container sets `hostname` to its service name, so the REST address it advertises resolves on the Docker networks. In production, also add `replication.factor = 3`.
 
 ---
 
@@ -495,7 +512,7 @@ The consumer exposes `GET /metrics` (`ConsumerMetrics`) and `GET /healthz` on po
 
 | # | Source | How | Every |
 | --- | --- | --- | --- |
-| 1 | Gateways | `GET http://gateway-<shop>:8080/metrics` | 1 s |
+| 1 | Gateways | `GET http://gateway-<shop>-a:8080/metrics` and `-b`: all ten instances (R3) | 1 s |
 | 2 | Consumers | `GET http://consumer-<n>:8080/metrics` | 1 s |
 | 3 | Plant Kafka | AdminClient end offsets for the plant topics; a tail consumer (assigned at the end, never committing) tracks the newest reading's device time and keeps the last 50 alarms | 2 s, and continuously |
 | 4 | Central Kafka | AdminClient end offsets and committed offsets for `central-readings` and `central-alarms`; a tail consumer tracks the newest mirrored device time | 2 s, and continuously |
@@ -503,14 +520,16 @@ The consumer exposes `GET /metrics` (`ConsumerMetrics`) and `GET /healthz` on po
 
 Each source's health comes from the age of its last successful poll: under 3 s is `Healthy`, under 10 s is `Degraded`, and anything older is `Down`. `ServiceHealth` (section 4) carries it.
 
+A shop's tile, the live rate and the proof use the shop's active gateway instance: of the two, the one whose last metrics say `role` `active`, the more recently polled if both do. A standby's buffer and numbers never count. With no active instance (during a switch-over), the shop's tile ages to `Down` and the verdict waits. Two identical API instances, `api-1` and `api-2`, run behind the dashboard's nginx (R4). Each polls every source itself and shares nothing with the other, so either can answer alone.
+
 | # | Method | Path | Returns or does |
 | --- | --- | --- | --- |
 | 1 | GET | `/api/overview` | One tile per stage: health, rate, buffer or lag, freshness, and the drain-time estimate |
 | 2 | GET | `/api/reconciliation` | Totals, 500 per-machine rows and the verdict |
 | 3 | GET | `/api/chart?minutes=10` | Readings per 5-second bucket by device time, plus the completeness watermark |
 | 4 | GET | `/api/alarms` | Recent plant-side alarms (from the plant tail) and central alarms with their latency (`stored_at − device_time`) |
-| 5 | POST | `/api/plant/pause` and `/api/plant/resume` | Sends `Pause` or `Resume` to all five gateways |
-| 6 | POST | `/api/machines/{machineId}/faults` | Body `{ "kind": "Overheat" }` → `InjectFault` to that machine's gateway |
+| 5 | POST | `/api/plant/pause` and `/api/plant/resume` | Sends `Pause` or `Resume` to every gateway instance, standbys included, so a standby that takes over keeps the plant's paused state |
+| 6 | POST | `/api/machines/{machineId}/faults` | Body `{ "kind": "Overheat" }` → `InjectFault` to the active instance of that machine's shop; 503 when the shop has none |
 | 7 | GET | `/healthz` | Liveness |
 
 The proof, for each machine:
@@ -534,7 +553,7 @@ The watermark is the oldest `max_device_time` among machines whose `stored = max
 
 ## 9. Dashboard
 
-React, Vite, TypeScript and Tailwind, built with Bun and served by nginx on `:3000`. Every API call uses a relative `/api/...` path, which nginx proxies to `api:8080`. TanStack Query polls every second.
+React, Vite, TypeScript and Tailwind, built with Bun and served by nginx on `:3000`. Every API call uses a relative `/api/...` path, which nginx proxies to `api:8080`; after R4, to an `upstream` of `api-1` and `api-2` with a passive health check (a refused or timed-out connection moves the request to the other instance). TanStack Query polls every second. After R3, the buffers panel names each shop's active instance.
 
 ```text
 ┌ Plant to central ─────────────────────────────────────────────────────────┐
@@ -567,16 +586,19 @@ Colour is never the only signal: each health state has a text label too. The lay
 
 `src/deployment/scripts/drill.sh` wraps Docker commands so the panel sees exactly what is being broken. The Compose project name is `edd`.
 
+The commands are shown as they run once the resilience tier is built. Before R4, `mm2-1 mm2-2` is the single `mm2` (container `edd-mm2-1`). Before R3, `<active>` is the shop's only gateway, `gateway-<shop>`. After R3, `<active>` is the shop's active instance, which the script reads from `/api/overview`.
+
 | # | Command | Runs | Expected |
 | --- | --- | --- | --- |
-| 1 | `drill.sh central-down` | `docker compose kill mm2 consumer-1 consumer-2`, then `docker compose stop central-db central-kafka` | The central tiles go Down; the plant keeps writing; plant alarms stay live. The kills act like a power cut: no offsets are saved on the way down, so the restart redelivers records |
-| 2 | `drill.sh central-up` | `docker compose start central-kafka central-db consumer-1 consumer-2 mm2` | Mirror lag clears in seconds; the database drains while its ETA counts down; the chart gap fills in |
-| 3 | `drill.sh wan-cut` / `wan-restore` | `docker network disconnect` / `connect edd_plant edd-mm2-1` | Mirror lag grows, then clears |
-| 4 | `drill.sh plant-down` / `plant-up` | `docker compose stop` / `start plant-kafka` | Gateway buffers climb, then drain, alarms first |
-| 5 | `drill.sh kill-gateway BDY` | `docker compose kill gateway-bdy`, then `start` | It restarts, sequences continue, and missed seconds are backfilled. Duplicates absorbed rises only if the kill landed between a broker acknowledgement and the row's delete |
+| 1 | `drill.sh central-down` | `docker compose kill mm2-1 mm2-2 consumer-1 consumer-2`, then `docker compose stop central-db central-kafka` | The central tiles go Down; the plant keeps writing; plant alarms stay live. The kills act like a power cut: no offsets are saved on the way down, so the restart redelivers records |
+| 2 | `drill.sh central-up` | `docker compose start central-kafka central-db consumer-1 consumer-2 mm2-1 mm2-2` | Mirror lag clears in seconds; the database drains while its ETA counts down; the chart gap fills in |
+| 3 | `drill.sh wan-cut` / `wan-restore` | `docker network disconnect` / `connect edd_plant`, for `edd-mm2-1-1` and `edd-mm2-2-1` | Mirror lag grows, then clears |
+| 4 | `drill.sh plant-down` / `plant-up` | `docker compose stop` / `start plant-kafka` | Gateway buffers climb, then drain, alarms first. The lease cannot move while the broker is down, so each active gateway keeps collecting to its disk |
+| 5 | `drill.sh kill-gateway BDY` | `docker compose kill <active>`, then `start` | It restarts from its disk within the 6 s session, so it keeps the lease; sequences continue, and missed seconds are backfilled. If the restart takes longer, the standby takes over instead. Duplicates absorbed rises only if the kill landed between a broker acknowledgement and the row's delete |
 | 6 | `drill.sh kill-consumer 1` | `docker compose kill consumer-1`, then `start` after 10 s | The group rebalances; the redelivered batch is absorbed |
 | 7 | `drill.sh proof` | Pause, wait for every lag to reach 0, fetch `/api/reconciliation` | Prints the verdict and totals |
-| 8 | `drill.sh lose-gateway-disk BDY` | `docker compose rm -sf gateway-bdy`, `docker volume rm edd_gateway-bdy-data`, then `up -d gateway-bdy` | Numbering continues from the plant log, with no collision and 0 gaps; the seconds lost with the disk are backfilled from machine history |
+| 8 | `drill.sh lose-gateway-disk BDY` | `docker compose rm -sf <active>`, `docker volume rm edd_<active>-data`, then `up -d <active>` | Numbering continues from the plant log, with no collision and 0 gaps; the seconds lost with the disk are backfilled from machine history. After R3 the standby holds the lease meanwhile, and the rebuilt instance reconciles its new file from the log when it next holds it |
+| 9 | `drill.sh failover BDY` (R3) | `docker compose kill <active>`; wait until `/api/overview` shows the other instance as BDY's active one (up to 30 s); then `docker compose start` the killed one | The other instance takes the lease within 15 s (a 6 s session, then reconcile and backfill), and the script prints how long it took. The killed instance returns as the standby; if it is `-a`, it takes the lease back, which is one more safe switch. `drill.sh proof` then shows PASS with 0 gaps |
 
 ---
 
@@ -665,18 +687,23 @@ Build feature by feature. Each feature ends with something that runs and a green
 | F7 | Dashboard | Panels, controls, chart | Playwright: tiles turn healthy and the chart renders |
 | F8 | Drills and proof | `drill.sh`; the end-to-end drill test; alarm injection | Playwright: `central-down` → proof PASS |
 | F9 | Hardening and rehearsal | Check memory under an outage with `docker stats`; README; rehearse the demo script | Every drill passes twice from a cold start, and no container exceeds its limit |
+| F10 | Resilience tier | Reconcile from the plant log, backfill, active/standby gateway pairs with a Kafka lease, two APIs, two MirrorMaker 2 workers (doc 03 tasks R1–R4; doc 02 §4.3, "Fault tolerance and zero downtime") | `drill.sh failover BDY`: the standby takes over within 15 s. Killing one API or one MirrorMaker 2 worker leaves the dashboard and mirroring running. After each, `drill.sh proof` shows PASS with 0 gaps |
 
 ### Cut line: 24 hours to the panel
 
-The demo is due within 24 hours of 12 November 2026, so this cut line overrides the table above. Stretch items are built in the order listed, only once every must item works.
+The demo is due within 24 hours of 12 November 2026, so this cut line overrides the table above. The tiers below the must tier are built in the order listed, only once every must item works and the Task 16 rehearsal has passed.
 
 | # | Tier | Scope |
 | --- | --- | --- |
 | 1 | Must | F0–F6. F7: dashboard panels 1–4 plus the pause, resume and inject-alarm controls. F8: the `central-down`, `central-up`, `kill-gateway`, `kill-consumer` and `proof` drills. Tests: unit tests for the buffer, sequencing and proof maths, plus two integration tests, a consumer fed every record twice (one row each) and a sender across a broker pause (exact drain). F9: one cold-start rehearsal of section 14, steps 1–6, with `docker stats` watched |
-| 2 | Stretch 1 | Rebuild from the plant log, its integration test, and drill 8 |
-| 3 | Stretch 2 | Backfill on restart and the `DataGap` alarm. Without it, a killed gateway's few seconds of downtime show as a gap in device time, never in sequence |
-| 4 | Stretch 3 | The WAN-cut and plant-down drills, and the plant-side alarm list |
-| 5 | Cut | The Playwright tests and the full-pipeline integration test: the live proof stands in for them. Passing every drill twice: once is enough |
+| 2 | Resilience R1 | Reconcile from the plant log (was Stretch 1): read each machine's newest position from the plant topics, reconcile the buffer with it, its tests, and drill 8 |
+| 3 | Resilience R2 | Backfill on restart and the `DataGap` alarm (was Stretch 2). Without it, a killed gateway's few seconds of downtime show as a gap in device time, never in sequence |
+| 4 | Resilience R3 | Active/standby gateway pairs with a Kafka lease: ten gateways, the active instance on the dashboard, drill 9 (`failover`), and diagram 01 redrawn. Needs R1 and R2 |
+| 5 | Resilience R4 | No single point of failure elsewhere: two APIs behind nginx, two MirrorMaker 2 workers in dedicated mode, `restart: on-failure` on every .NET service. Needs none of R1–R3 and can be built before, between or after them |
+| 6 | Stretch 3 | The WAN-cut and plant-down drills, and the plant-side alarm list |
+| 7 | Cut | The Playwright tests and the full-pipeline integration test: the live proof stands in for them. Passing every drill twice: once is enough |
+
+Every resilience task ends with `drill.sh proof` at PASS with 0 gaps. If the tier is not finished in time, the demo runs the must tier (crash and restart from disk) and shows doc 02's failover design on screen. The production-only measures in doc 02 §4.3 (three brokers per site, a PostgreSQL synchronous standby, transactional fencing, rolling upgrades) are documented, not built.
 
 ---
 

@@ -4,11 +4,11 @@
 
 **Goal:** Build the Docker Compose demo that proves a six-hour central outage loses nothing and duplicates nothing: 500 simulated machines → 5 gateways → plant Kafka → MirrorMaker 2 → central Kafka → 2 store writers → PostgreSQL, with a control-room API, a dashboard and scripted drills.
 
-**Architecture:** Three .NET 11 hosts (`Gateway` ×5, `Consumer` ×2, `Api` ×1) over shared libraries (`Contracts`, `Domain`, `Messaging`, `Persistence`), two single-broker Kafka 4.4 clusters joined by MirrorMaker 2, PostgreSQL 18 as the one deduplication point, and a React dashboard behind nginx. Everything runs from `src/deployment/compose.yaml` (project `edd`).
+**Architecture:** Three .NET 11 hosts (`Gateway` ×5, `Consumer` ×2, `Api` ×1; after the resilience tier, `Gateway` ×10 as active/standby pairs and `Api` ×2) over shared libraries (`Contracts`, `Domain`, `Messaging`, `Persistence`), two single-broker Kafka 4.4 clusters joined by MirrorMaker 2, PostgreSQL 18 as the one deduplication point, and a React dashboard behind nginx. Everything runs from `src/deployment/compose.yaml` (project `edd`).
 
 **Tech Stack:** .NET 11 / C# 15, Confluent.Kafka, Microsoft.Data.Sqlite, Npgsql, xUnit.net v3 on Microsoft.Testing.Platform, AwesomeAssertions, Testcontainers, Bun, React 19, Vite 8, TypeScript 7, Tailwind 4, TanStack Query, Recharts, Docker Compose.
 
-**Spec:** [doc 00, the build spec](00-edd-demo-game-plan.md) (sections cited as §n), [doc 02, the solution design](02-solution-design.md). Doc 02 wins where they differ. The cut line in §13 decides scope: build every **Must** task first; Stretch tasks only after Task 16 passes.
+**Spec:** [doc 00, the build spec](00-edd-demo-game-plan.md) (sections cited as §n), [doc 02, the solution design](02-solution-design.md). Doc 02 wins where they differ. The cut line in §13 decides scope: build every **Must** task first; the resilience tier (R1–R4) and then Stretch 3 only after Task 16 passes.
 
 ## Global Constraints
 
@@ -48,14 +48,16 @@
 3. **The proof never says PASS early.** While anything is still buffered or lagging, the verdict is `WAIT`, even if the counts happen to match. Pinned by a Task 12 test.
 4. **The API answers during `central-down`.** With central Kafka and PostgreSQL stopped, `/api/overview` must return 200 with those tiles `Down`, not a 500. Pinned by a Task 13 test.
 5. **A gateway restarted while paused stays paused and keeps numbering.** Pinned by Task 4's reopen tests and Task 5's resume test, and exercised by the kill drill.
+6. **One active gateway per shop.** Two instances never collect for the same shop at once, and a revoked instance stops before the next holder starts. Pinned by R3's lease tests.
+7. **A lost lease session is not a revocation.** When the plant broker is unreachable, the active gateway keeps collecting to its disk (doc 02 §4.2, tier 1). Stopping it would turn a broker outage into a loss beyond the history depth. Pinned by R3's `A_lost_session_keeps_the_active_running`.
 
 ## Deliberately not built (scope cuts)
 
-Not in the must tier, so no task builds them unless a Stretch task says so: the Playwright end-to-end tests and the full-pipeline integration test (§13 cut line); `Guard` (nothing needs it); per-host `.slnx` files; the simulator's wear drift (§5); signal 1 as a percentage of a disk budget (doc 02 §7 row 6); HTTP `Idempotency-Key` headers (every command is idempotent by design, doc 02 §4.6).
+Not in the must tier, so no task builds them unless a resilience or Stretch task says so: the Playwright end-to-end tests and the full-pipeline integration test (§13 cut line); `Guard` (nothing needs it); per-host `.slnx` files; the simulator's wear drift (§5); signal 1 as a percentage of a disk budget (doc 02 §7 row 6); HTTP `Idempotency-Key` headers (every command is idempotent by design, doc 02 §4.6); the production-only fault-tolerance measures (doc 02 §4.3: three brokers per site, a PostgreSQL synchronous standby, transactional fencing, rolling upgrades).
 
 ## Parallel lanes
 
-Tasks 1 and 2 run in parallel. After Task 1: Tasks 3, 4 and 6 in parallel, and Task 14 (dashboard) can start, since the API models are fixed in Task 1. Tasks 7 and 9 run in parallel. Everything else follows the numbering.
+Tasks 1 and 2 run in parallel. After Task 1: Tasks 3, 4 and 6 in parallel, and Task 14 (dashboard) can start, since the API models are fixed in Task 1. Tasks 7 and 9 run in parallel. Everything else follows the numbering. In the resilience tier, R3 needs R1 and R2; R4 needs none of them. They share `compose.yaml` and `drill.sh`, so they still run one at a time.
 
 ---
 
@@ -665,18 +667,289 @@ Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
 
 ---
 
-## Stretch (only after Task 16, in this order)
+## Resilience tier (only after Task 16: R1 → R2 → R3; R4 at any point)
 
-### Stretch 1: Rebuild numbering from the plant log (§5, drill 8)
+The user asked for a standby that takes over when a gateway fails, for zero downtime and for fault tolerance. Doc 02 §4.3, "Fault tolerance and zero downtime", states the target: no single point of failure, zero data loss, failover in seconds, and component downtime that never becomes data downtime. R1 and R2 grow out of the old Stretch 1 and 2. R3 needs both. R4 needs none of them. Every task ends with a live check: `drill.sh proof` reaches PASS with 0 gaps. The production-only measures in doc 02 §4.3 are not built.
 
-**Files:** `src/backend/EventDrivenDesign.Gateway/StateRebuilder.cs`, `src/backend/tests/EventDrivenDesign.IntegrationTests/StateRebuilderTests.cs`, `src/deployment/scripts/drill.sh`.
-**Interfaces:** `public static Task<IReadOnlyList<MachineState>> RebuildAsync(string bootstrap, IReadOnlyList<MachineInfo> machines, CancellationToken ct)` scans each partition of both plant topics backwards from the end in doubling chunks (1,000, 2,000, …) until every machine is found or offset 0 is reached. `Program` calls it when `GatewayBuffer.IsNew` and writes the result before the first tick. It retries while the broker is unreachable.
-- [ ] Test `Empty_file_continues_after_the_log`: produce seqs 1–50 for `P1-BDY-W042` to a container; rebuild → `LastSeq` 50. Implement, pass, add drill 8 (§10), commit `feat(gateway): rebuild sequence state from the plant log`.
+### Task R1: Reconcile from the plant log (drill 8)
 
-### Stretch 2: Backfill and `DataGap` (§5)
+Replaces Stretch 1. Doc 02 §4.3 (recovery step 2); §5 ("Rebuild on a new file"); §10 drill 8.
 
-**Files:** `Collector.cs`, `CollectorTests.cs`. **Interfaces:** `public IEnumerable<TickBatch> Backfill(DateTimeOffset now, int historyDepthSeconds)` yields 60-second chunks from each machine's `LastDeviceTimeMs` to `now`. Past the depth, it emits one `DataGap` alarm per machine.
-- [ ] Tests: a gap of 120 s → 120 readings per machine, device times continuous; a gap of 900 s with depth 600 → 600 readings plus one `DataGap`. Implement, pass, commit `feat(gateway): backfill missed seconds from machine history`.
+**Files:**
+- Create: `src/backend/EventDrivenDesign.Gateway/PlantLogReader.cs`
+- Modify: `src/backend/EventDrivenDesign.Persistence/GatewayBuffer.cs` (`LogPosition`, `ReconcileAsync`), `src/backend/EventDrivenDesign.Gateway/Program.cs`, `src/deployment/scripts/drill.sh` (`lose-gateway-disk`)
+- Test: `src/backend/tests/EventDrivenDesign.Tests/GatewayBufferTests.cs`, `src/backend/tests/EventDrivenDesign.IntegrationTests/PlantLogReaderTests.cs`
+
+**Interfaces:**
+- Consumes: `GatewayBuffer`, `MachineState` (Task 4); `KafkaConfigs.Tail`, `KafkaConfigs.Admin`, `KafkaConfigs.Producer` (tests), `Retry.Backoff` (Task 6); `TopicNames`, `MachineReading`, `MachineAlarm`, `Json.Options` (Task 1); `MachineCatalog` (Task 3).
+- Produces:
+  ```csharp
+  // EventDrivenDesign.Persistence, in GatewayBuffer.cs next to MachineState
+  public sealed record LogPosition(long LastSeq, long LastAlarmSeq, long LastDeviceTimeMs);
+
+  // GatewayBuffer: one transaction on the writer thread
+  public Task ReconcileAsync(IReadOnlyDictionary<string, LogPosition> log, CancellationToken ct);
+
+  // EventDrivenDesign.Gateway
+  public static class PlantLogReader
+  {
+      // The newest reading and alarm per machine in the plant topics. A machine with no reading is absent.
+      public static Task<IReadOnlyDictionary<string, LogPosition>> NewestAsync(
+          string bootstrap, IReadOnlyCollection<string> machines, CancellationToken ct);
+
+      // NewestAsync until the broker answers (Retry.Backoff between attempts), then buffer.ReconcileAsync.
+      public static Task ReconcileBufferAsync(
+          GatewayBuffer buffer, string bootstrap, IReadOnlyCollection<string> machines, ILogger log, CancellationToken ct);
+  }
+  ```
+- `NewestAsync`:
+  - It reads `TopicNames.Readings` and `TopicNames.Alarms`. Partitions come from `IAdminClient.GetMetadata`, and low and high watermarks from `QueryWatermarkOffsets`, each with a 10 s timeout, so an unreachable broker throws `KafkaException`.
+  - Each topic is scanned backwards in lock-step rounds. Round r reads the next 1,000 × 2^r records below where the previous round started, on every partition not yet at its low watermark. The scan stops when every machine in `machines` has been seen on that topic, or every partition has reached its low watermark.
+  - Per machine: the highest `Seq` seen in readings, with that reading's device time in ms, and the highest `AlarmSeq` seen in alarms (0 when none). Payloads are parsed with `Json.Options`; a record that does not parse is skipped.
+  - The consumer comes from `KafkaConfigs.Tail(bootstrap)` and uses `Assign` with explicit offsets, so it never joins a group or commits.
+- `ReconcileAsync`, for each machine in `log`, in one transaction:
+  - Delete its reading rows with `seq <= LastSeq` and its alarm rows with `seq <= LastAlarmSeq`: the log already holds those numbers.
+  - Upsert `machine_state` so that `last_seq`, `last_alarm_seq` and `last_device_time_ms` each become the larger of the local and the log value. A machine with no local row takes the log's.
+  - The lane counters behind `Stats()` follow the deletes.
+- `Program`: after `builder.Build()` and before `app.Run()`, when `buffer.IsNew`, call `await PlantLogReader.ReconcileBufferAsync(buffer, bootstrap, <the shop's machine ids>, app.Logger, CancellationToken.None)`. The `Collector` singleton is resolved later, so it starts from the rebuilt state, and nothing is numbered until the log answers (doc 02 §4.3). R3 moves this call into every lease assignment.
+- `drill.sh lose-gateway-disk <SHOP>` (§10 drill 8) = `docker compose rm -sf gateway-<shop>`, `docker volume rm edd_gateway-<shop>-data`, `docker compose up -d gateway-<shop>`. It checks the shop the way `kill-gateway` does.
+
+- [ ] **Step 1: Write the failing unit tests** in `GatewayBufferTests.cs`:
+  - `Reconcile_drops_rows_the_log_already_holds`: reading rows with seqs 48–52 for `P1-BDY-W042`, state `LastSeq` 52 with seq 52's device time. Reconcile with `LogPosition(50, 0, <seq 50's time>)`. Expected: `ReadOldest(10)` returns seqs 51 and 52 only; the state keeps `LastSeq` 52 and seq 52's time; `Stats().Readings` is 2.
+  - `Reconcile_takes_the_log_when_it_is_ahead`: rows 51–52, state `(52, 0, 5_200)`. Log `LogPosition(200, 3, 9_000)`. Expected: no rows left; state `(200, 3, 9000)`.
+  - `Reconcile_keeps_alarms_the_log_lacks`: alarm rows 1–2, `LastAlarmSeq` 2. Log alarm seq 1. Expected: alarm row 2 remains; `LastAlarmSeq` stays 2.
+  - `Reconcile_on_a_new_file_writes_the_log_state`: a new file, and a log for two machines. Expected: `LoadState()` holds both positions; `Stats()` counts 0 rows.
+- [ ] **Step 2: Write the failing integration tests** in `PlantLogReaderTests.cs`. Start Kafka and create the two plant topics as `SenderTests` does. Produce with `KafkaConfigs.Producer`: key = machine id, value = the contract serialised with `Json.Options`.
+  - `Newest_position_comes_from_the_log`: readings with seqs 1–50 (device time T0 + seq seconds) and alarms 1–3 for `P1-BDY-W042`. `NewestAsync(bootstrap, ["P1-BDY-W042", "P1-BDY-W001"], ct)`. Expected: W042 → `LogPosition(50, 3, <T0 + 50 s in ms>)`; no entry for W001.
+  - `Doubling_scan_reaches_past_other_traffic`: W042 seqs 1–50, then 30,000 readings of other machines (about 2,500 per partition, more than the first round of 1,000). Expected: W042 still has `LastSeq` 50.
+- [ ] **Step 3: Run them and see them fail.** From `src/backend/`: `dotnet test --project tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj` and `dotnet test --project tests/EventDrivenDesign.IntegrationTests/EventDrivenDesign.IntegrationTests.csproj`. Expected: compile errors (`LogPosition`, `ReconcileAsync` and `PlantLogReader` do not exist).
+- [ ] **Step 4: Implement** `LogPosition`, `ReconcileAsync`, `PlantLogReader`, the `Program` call and the drill.
+- [ ] **Step 5: Run every suite.** `src/scripts/build/test-backend.sh all`. Expected: all pass, 0 warnings.
+- [ ] **Step 6: Verify live.** From `src/deployment/`:
+  - `docker compose up -d --build --wait`, wait 30 s, and note `lastSeqByMachine["P1-BDY-W042"]` from `docker run --rm --network edd_plant busybox wget -qO- http://gateway-bdy:8080/metrics`.
+  - `scripts/drill.sh lose-gateway-disk BDY`, wait 30 s, and read it again. Expected: higher than before; numbering never restarted at 1.
+  - `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps. Then `scripts/drill.sh resume`.
+- [ ] **Step 7: Commit.** `git commit -m "feat(gateway): reconcile buffer state from the plant log"`
+
+### Task R2: Backfill and `DataGap`
+
+Replaces Stretch 2. Doc 02 §4.3 (recovery step 3); §5 ("Backfill on restart").
+
+**Files:**
+- Modify: `src/backend/EventDrivenDesign.Gateway/Collector.cs`, `CollectorService.cs`, `Program.cs`
+- Test: `src/backend/tests/EventDrivenDesign.Tests/CollectorTests.cs`, `CollectorServiceTests.cs`
+
+**Interfaces:**
+- Consumes: `Collector` (Task 5), `CollectorService` (Task 8), `MachineState`, `TickBatch` (Task 4), `MachineAlarm`, `AlarmKind.DataGap` (Task 1).
+- Produces:
+  ```csharp
+  // Collector
+  public IEnumerable<TickBatch> Backfill(DateTimeOffset now, int depthSeconds);
+
+  // CollectorService: one new parameter before time
+  public CollectorService(Collector collector, GatewayBuffer buffer, IReadOnlyList<MachineInfo> machines,
+      double faultsPerMinute, int historyDepthSeconds, TimeProvider time);
+  ```
+- `Backfill`:
+  - Only machines with a resume state are backfilled. A machine's last tick is its `LastDeviceTimeMs` − index × 10 ms. Its missed ticks are the last tick + k seconds, for k = 1 to n, where n is the number of whole seconds from the last tick to `now`.
+  - Each missed tick yields one reading built exactly as `Tick` builds it: device time = tick + index × 10 ms, `seq = last + 1`, the simulator's next values. Queued faults stay queued for the next live tick.
+  - When n is larger than `depthSeconds`, only the newest `depthSeconds` ticks are backfilled. The older ones become one `DataGap` alarm on the alarm lane, with: the next `alarm_seq`; `ReadingSeq` = the machine's last seq before the backfill; `DeviceTime` = the first missing tick + index × 10 ms; severity `"warning"`; no signal; `Value` = the missing seconds; `Threshold` = `depthSeconds`. Missing seconds take no sequence numbers, so the gap shows in device time, never in sequence.
+  - It yields one `TickBatch` per 60 seconds of device time, from the oldest backfilled tick. Each batch carries its rows and the state after it of every machine it touches. The `DataGap` rows go in the first batch.
+  - `LastSeqByMachine` and `Generated` include the backfilled readings.
+- `CollectorService`: before its first timer wait, unless paused, it writes every batch of `Backfill(time.GetUtcNow(), historyDepthSeconds)` with `WriteTickAsync`. It repeats with a fresh `now` until a pass yields nothing, so the seconds spent backfilling are covered too. A paused gateway never backfills (§5). A failed write stays fatal.
+- `Program` passes `Gateway:HistoryDepthSeconds` (default 600, §5).
+
+- [ ] **Step 1: Write the failing tests.** In `CollectorTests.cs`, every BDY machine resumes at `LastSeq` 10 with its last tick at T0 (device time T0 + index × 10 ms):
+  - `Backfill_fills_a_120_second_gap`: `Backfill(T0 + 120 s, 600)`. Expected: 2 batches; 120 readings per machine with seqs 11–130 and device times T0 + 1 s … T0 + 120 s (plus the offset), 1 s apart; no alarm rows; the last batch's states have `LastSeq` 130.
+  - `Backfill_past_the_depth_records_one_DataGap`: `Backfill(T0 + 900 s, 600)`. Expected: 600 readings per machine with seqs 11–610 and device times T0 + 301 s … T0 + 900 s; one `DataGap` alarm per machine with `Value` 300, `Threshold` 600, `ReadingSeq` 10 and device time T0 + 1 s (plus the offset).
+  - `Backfill_skips_machines_never_numbered`: no resume state. Expected: no batches.
+  - `Backfill_within_a_second_yields_nothing`: `now` = T0 + 900 ms. Expected: no batches.
+
+  In `CollectorServiceTests.cs` (the helper passes `historyDepthSeconds` 600):
+  - `Start_backfills_before_the_first_tick`: write one collector tick at T − 120 s (100 readings), then start the service at T without advancing the clock and wait 500 ms. Expected: 12,100 readings in the buffer, and every state at `LastSeq` 121.
+  - `A_paused_gateway_never_backfills`: the same, paused. Expected: 100 readings.
+- [ ] **Step 2: Run them and see them fail.** From `src/backend/`: `dotnet test --project tests/EventDrivenDesign.Tests/EventDrivenDesign.Tests.csproj`. Expected: compile errors (`Backfill` and the new constructor do not exist).
+- [ ] **Step 3: Implement** `Backfill`, the service's start-up backfill and the `Program` setting.
+- [ ] **Step 4: Run every suite.** `src/scripts/build/test-backend.sh all`. Expected: all pass, 0 warnings.
+- [ ] **Step 5: Verify live.** From `src/deployment/`:
+  - `docker compose down -v && docker compose up -d --build --wait`, then wait 60 s.
+  - `docker compose kill gateway-bdy`, wait 30 s, `docker compose start gateway-bdy`, wait 30 s.
+  - `docker compose exec central-db psql -U edd -d edd -c "select max(step) from (select device_time - lag(device_time) over (order by seq) as step from readings where machine_id = 'P1-BDY-W042') s"`. Expected: under 2 s. Without the backfill it would be about 30 s.
+  - `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps. Then `scripts/drill.sh resume`.
+- [ ] **Step 6: Commit.** `git commit -m "feat(gateway): backfill missed seconds from machine history"`
+
+### Task R3: Active/standby gateway pairs with a Kafka lease
+
+Needs R1 and R2. Doc 02 §4.3 ("Fault tolerance and zero downtime") and §4.10 rows 5–6; §3, §4 (topic 5, `GatewayMetrics.Role`), §5 (`Gateway__Instance`), §8, §10 drill 9.
+
+**Files:**
+- Create: `src/backend/EventDrivenDesign.Gateway/GatewayLease.cs`
+- Delete: `src/backend/EventDrivenDesign.Gateway/SenderService.cs` (the lease runs the sender now)
+- Modify (contracts and settings): `src/backend/EventDrivenDesign.Contracts/TopicNames.cs`, `Metrics.cs`, `ApiModels.cs`; `src/backend/EventDrivenDesign.Messaging/KafkaConfigs.cs`
+- Modify (gateway): `src/backend/EventDrivenDesign.Gateway/Collector.cs` (`Resume`), `Program.cs`
+- Modify (API): `src/backend/EventDrivenDesign.Api/Snapshot.cs`, `Pollers.cs`, `ApiRoutes.cs`, `OverviewBuilder.cs`, `Program.cs`
+- Modify (dashboard): `src/frontend/src/api.ts`, `src/frontend/src/format.ts`, `src/frontend/src/panels/BuffersLag.tsx`
+- Modify (runtime): `src/deployment/kafka/create-topics.sh`, `src/deployment/compose.yaml`, `src/deployment/scripts/drill.sh`
+- Modify (diagram): `src/scripts/diagrams/gen01_plant_to_central.py`, then regenerate `docs/diagrams/01-plant-to-central.html` and `.svg`; the diagram's alt text in `docs/02-solution-design.md` §3
+- Test: `src/backend/tests/EventDrivenDesign.IntegrationTests/GatewayLeaseTests.cs`; `src/backend/tests/EventDrivenDesign.Tests/MessagingTests.cs`, `TopicNamesTests.cs`, `CollectorTests.cs`, `OverviewBuilderTests.cs`; `src/frontend/src/format.test.ts`
+
+**Interfaces:**
+- Consumes: `PlantLogReader.ReconcileBufferAsync` (R1); `CollectorService` with its backfill (R2); `Sender` (Task 7); `Snapshot`, `Pollers`, `OverviewBuilder`, `ApiRoutes` (Task 13).
+- Produces:
+  ```csharp
+  // TopicNames
+  public static string Lease(string shop);   // "gateway.lease.bdy": one partition, never written to
+
+  // KafkaConfigs
+  public static ConsumerConfig Lease(string bootstrap, string shop, string instanceId);
+
+  // Contracts: one new last parameter each
+  public sealed record GatewayMetrics(/* … as in Task 1 … */ ProcessStats Process, string Role);  // "active" or "standby"
+  public sealed record GatewayTile(/* … as in Task 1 … */ long Generated, string? Instance);      // the shop's active instance
+
+  // Collector: sets numbering and last device time from the state; machines missing from it keep theirs.
+  // Call it only while no CollectorService runs.
+  public void Resume(IReadOnlyDictionary<string, MachineState> state);
+
+  // EventDrivenDesign.Gateway
+  public sealed class GatewayLease(string bootstrap, string shop, string instanceId,
+      Func<CancellationToken, Task> whileActive, ILogger log) : BackgroundService
+  {
+      public bool IsActive { get; }   // from the assignment until a revocation; unchanged by a lost session
+  }
+
+  // Pollers
+  public static string ShopOf(string endpoint);                                  // "gateway-bdy-a:8080" → "BDY"
+  // Snapshot
+  public Snapshot(IEnumerable<string> gateways, IEnumerable<string> consumers);  // gateway instances: "gateway-bdy-a", …
+  public IReadOnlyList<string> Instances { get; }
+  public void SetGateway(string instance, GatewayMetrics m, DateTimeOffset at);
+  public Stamped<GatewayMetrics>? Gateway(string shop);                          // the shop's active instance, or null
+  // ApiRoutes
+  public static Result<string> GatewayFor(string machineId, Snapshot s);         // "<active instance>:8080"
+  ```
+- `KafkaConfigs.Lease`: `GroupId` `gateway-lease-<shop>` (lower case); `GroupInstanceId` = the instance; `SessionTimeoutMs` 6000; `HeartbeatIntervalMs` 2000; `PartitionAssignmentStrategy.Range`; `EnableAutoCommit` false; `AutoOffsetReset.Latest`.
+  - It uses the classic group protocol (librdkafka's default). The newer consumer protocol (KIP-848) sets session timeouts on the broker, with a 45 s minimum. 6,000 ms is the broker's default `group.min.session.timeout.ms`, the lowest it accepts.
+  - Range is an eager protocol: every rebalance revokes first and then hands each member its full assignment, even an empty one, so an instance always learns whether it holds the lease. Range sorts static members by `group.instance.id`, so `-a` holds the lease whenever it is up.
+- `GatewayLease` (the lease partition is partition 0 of `TopicNames.Lease(shop)`):
+  1. It subscribes and calls `Consume(500 ms)` in a loop on a long-running thread. Nothing is ever produced; the loop only drives heartbeats and rebalances.
+  2. Assigned, with the lease partition, while no term runs: `IsActive = true`, log it, and start a term, `whileActive(token)`, on the thread pool.
+  3. Assigned, with the lease partition, while a term runs (it survived a lost session): carry on.
+  4. Assigned without the lease partition while a term runs: stop the term, as in rule 5.
+  5. Revoked, with the lease partition: cancel the term's token and wait, inside the handler, until `whileActive` returns, so the next holder is assigned only after this one has stopped. Then `IsActive = false`. Unacknowledged rows stay on disk. A revoke without the lease partition changes nothing.
+  6. Lost, with the lease partition (the session expired because the plant broker was unreachable for 6 s): keep the term running. Its disk buffer rides out the broker outage (doc 02 §4.2, tier 1), and the standby cannot be granted the lease meanwhile. The next assignment decides (rules 3 and 4).
+  7. A faulted term is fatal: the consume loop rethrows its exception from `ExecuteAsync`, so the host stops with a non-zero exit code and Compose restarts it, as a faulted `CollectorService` does today (Task 8).
+  8. On host stop: stop the term, then `Close()` the consumer. A static member sends no LeaveGroup, so the standby is granted the lease after the 6 s session timeout.
+- Gateway host (`Program`):
+  - New required setting `Gateway__Instance`: the Compose service name, e.g. `gateway-bdy-a`. It is the lease's `group.instance.id` and the `GatewayId` in `/metrics`.
+  - `GatewayLease` is the only hosted service. `CollectorService` is no longer registered, and `SenderService` is deleted. One term (`whileActive`):
+    1. `PlantLogReader.ReconcileBufferAsync(buffer, …)` (R1), on every term, not only on a new file, because the partner may have numbered further. R1's start-up call is removed.
+    2. `collector.Resume(buffer.LoadState())`.
+    3. Start a new `CollectorService` (it backfills first, R2) and `sender.RunAsync(token)`. When the token is cancelled, stop both; when either faults, the term faults.
+  - `/metrics`: `Role` = `lease.IsActive ? "active" : "standby"`.
+- API:
+  - `Api__Gateways` lists the ten endpoints, `gateway-prs-a:8080,gateway-prs-b:8080,…,gateway-asm-b:8080` (also the default in `Program`); `Program` passes their host names to `Snapshot`. `Shops` stays the five shops, derived from the instances.
+  - `Snapshot.Gateway(shop)` is the shop's active instance: of its instances whose last metrics say `Role` `"active"`, the most recently polled. `SettledSince(shop)` follows that instance. `OverviewBuilder` already reads `Gateway(shop)`, so the tile, the live rate, the proof and the drained check use the active instance, and a standby's buffer and stale numbering never count.
+  - `GatewayTile.Instance` = the active instance's `GatewayId`, or null when the shop has none.
+  - Pause and resume fan out to every entry in `Snapshot.Instances`, so a standby that takes over keeps the paused state. The error lists the instances not reached.
+  - `ApiRoutes.GatewayFor(machineId, s)`: a bad id → `api.machine.bad_id` (Invalid); no active instance for the shop → `api.gateway.unavailable` (Unavailable, 503); otherwise `"<instance>:8080"`.
+- Dashboard: `api.ts` adds `instance: string | null` to the gateway tile. `format.ts` adds `instanceLabel(instance: string | null): string` (`"gateway-bdy-b"` → `"b"`, null → `"—"`), and `BuffersLag` shows it next to each shop (`BDY · b`).
+- Runtime:
+  - `create-topics.sh` also creates `gateway.lease.prs`, `.bdy`, `.pnt`, `.mch` and `.asm`, with 1 partition each and `--if-not-exists`.
+  - Compose: ten gateways from the `x-gateway` anchor, `gateway-<shop>-a` and `gateway-<shop>-b`. Each has `Gateway__Instance` = its service name, the shop's existing seed (both read the same machines), and its own volume `gateway-<shop>-<a|b>-data`; 256 MB each and `restart: on-failure` (§3). The old `gateway-<shop>` services and volumes go.
+  - `drill.sh`: a helper reads the shop's active instance from `/api/overview` (`curl -fsS --max-time 5`, parsed with `python3 -c`) and fails when there is none. `kill-gateway` and `lose-gateway-disk` act on it; its volume is `edd_<instance>-data`. New `failover <SHOP>` (§10 drill 9): kill the active instance; poll `/api/overview` every 1 s, for up to 30 s, until the other instance is the shop's active one and `Healthy`; print `<instance> took over after N s`; then `docker compose start` the killed one. It exits non-zero when nobody took over.
+- Diagram 01: each shop's gateway becomes a pair, `gateway-<shop>-a` (active) and `gateway-<shop>-b` (standby, dashed), with their volumes and the note `lease: gateway.lease.<shop> · 1 partition · static member · session 6 s`. The `Gateways ×5` chip becomes `Gateways ×10 (5 pairs)`. The `machine_state` ledger row reads "every lease assignment: reconcile with plant Kafka, then backfill".
+
+- [ ] **Step 1: Write the failing unit tests:**
+  - `MessagingTests.Lease_settings_match_the_spec`: `KafkaConfigs.Lease("k:9092", "BDY", "gateway-bdy-a")` has the values above.
+  - `TopicNamesTests.Lease_topic_is_per_shop`: `TopicNames.Lease("BDY")` is `"gateway.lease.bdy"`.
+  - `CollectorTests.Resume_restarts_numbering_from_the_given_state`: three ticks, then `Resume` with `P1-BDY-W042` at `LastSeq` 200. Expected: the next tick gives it seq 201; the other machines continue at 4.
+  - In `OverviewBuilderTests.cs`:
+    - `Tile_and_proof_use_the_active_instance`: `gateway-bdy-a` is standby with `lastSeqByMachine` 3 and 50 buffered rows; `gateway-bdy-b` is active, paused and drained at 5; the other shops are active, paused and drained, and every count matches. Expected: BDY's tile has `Instance` `"gateway-bdy-b"` and generated 5; the verdict is PASS.
+    - `A_shop_without_an_active_instance_waits`: both BDY instances are standby. Expected: BDY's tile is `Down` with `Instance` null; the verdict is WAIT.
+    - `ShopOf_strips_the_instance`: `Pollers.ShopOf("gateway-bdy-a:8080")` is `"BDY"`.
+    - `Fault_goes_to_the_active_instance` (→ `"gateway-bdy-b:8080"`) and `Fault_without_an_active_instance_is_unavailable` (→ `ErrorKind.Unavailable`). They replace the two `GatewayFor` tests.
+    - The existing tests switch to instance names and `Role` `"active"` through their helpers. Their assertions stay as they are.
+  - `format.test.ts`: `instanceLabel("gateway-bdy-b")` is `"b"`; `instanceLabel(null)` is `"—"`.
+- [ ] **Step 2: Write the failing integration tests** in `GatewayLeaseTests.cs`. Each starts Kafka as `SenderTests` does and creates `gateway.lease.tst` with 1 partition. Two leases for shop `TST`, `tst-a` and `tst-b`, get a `whileActive` that counts its starts and waits on its token.
+  - `Exactly_one_instance_holds_the_lease`: start `tst-b`, then `tst-a`. Expected: within 15 s exactly one is active, and it is `tst-a`; sampled every 100 ms for the next 5 s, never both.
+  - `The_standby_takes_over_within_15_seconds`: stop the active one. Expected: its term's token is cancelled at once, and the other is active within 15 s.
+  - `A_lost_session_keeps_the_active_running`: `PauseAsync` the container for 10 s. Expected: `tst-a`'s token is never cancelled and it stays active. After `UnpauseAsync`, within 30 s exactly one instance is active, it is `tst-a`, and its `whileActive` started once.
+- [ ] **Step 3: Run them and see them fail.** From `src/backend/`, both test projects; from `src/frontend/`, `bun test`. Expected: compile errors and a missing export.
+- [ ] **Step 4: Implement** the contracts, the settings, `GatewayLease`, `Collector.Resume`, the gateway `Program`, the API changes and the dashboard label. Delete `SenderService.cs`.
+- [ ] **Step 5: Run every suite.** `src/scripts/build/test-backend.sh all` and `src/scripts/build/test-frontend.sh`. Expected: all pass, 0 warnings.
+- [ ] **Step 6: Write the runtime changes:** the topics script, the ten gateways in Compose, `Api__Gateways`, and the drills.
+- [ ] **Step 7: Redraw diagram 01.** Edit the generator, run `python3 src/scripts/diagrams/gen01_plant_to_central.py`, then `src/scripts/diagrams/check.sh --export 01-plant-to-central`. Expected: both checks pass and the SVG is written. Update the diagram's alt text in doc 02 §3 to say five active/standby gateway pairs.
+- [ ] **Step 8: Verify live.** From `src/deployment/`:
+  - `docker compose up -d --build --wait --remove-orphans`, then remove the old volumes: `docker volume rm edd_gateway-prs-data edd_gateway-bdy-data edd_gateway-pnt-data edd_gateway-mch-data edd_gateway-asm-data`.
+  - `curl -fsS http://localhost:3000/api/overview`. Expected: five gateway tiles `Healthy`, each with instance `gateway-<shop>-a`; a live rate of about 500, because standbys send nothing.
+  - `scripts/drill.sh failover BDY`. Expected: `gateway-bdy-b took over after N s`, with N ≤ 15; then `gateway-bdy-a` returns and takes the lease back.
+  - `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps. Then `scripts/drill.sh resume`.
+  - `docker stats --no-stream`. Expected: every container below its limit.
+- [ ] **Step 9: Commit.** `git commit -m "feat(gateway): run active/standby gateway pairs with a Kafka lease"`
+
+### Task R4: No single point of failure elsewhere in the demo
+
+Needs none of R1–R3. Doc 02 §4.3 (rows 3, 5, 7 and 8 of its table); §3, §6, §9, §10 drills 1–3.
+
+**Files:**
+- Modify: `src/deployment/compose.yaml` (`api-1` and `api-2` from an `x-api` anchor; `mm2-1` and `mm2-2` from an `x-mm2` anchor; the dashboard's `depends_on`), `src/deployment/nginx/default.conf`, `src/deployment/kafka/mm2.properties`, `src/deployment/scripts/drill.sh`
+
+**Interfaces:**
+- Two APIs: `api-1` and `api-2`, identical to today's `api` (networks plant, central and ops; 256 MB each; `restart: on-failure`). Each polls every source itself and shares nothing with the other, so either can answer alone. The dashboard's `depends_on` names both.
+- nginx (open-source nginx 1.27.3 and later resolves upstream names at run time with `resolve`, so nginx still starts without the APIs). `resolver` moves to the top of `default.conf`, which is the `http` context:
+  ```nginx
+  resolver 127.0.0.11 valid=5s;   # Docker's embedded DNS
+
+  upstream api {
+      zone api 64k;
+      ip_hash;                    # one viewer reads one API's snapshot, so the numbers do not jump between two
+      server api-1:8080 resolve max_fails=1 fail_timeout=5s;
+      server api-2:8080 resolve max_fails=1 fail_timeout=5s;
+  }
+
+  server {
+      listen 80;
+      root /usr/share/nginx/html;
+
+      location /api/ {
+          proxy_pass http://api;
+          proxy_next_upstream error timeout non_idempotent;   # every command is idempotent (doc 02 §4.6)
+          proxy_connect_timeout 1s;
+          proxy_read_timeout 10s;
+      }
+
+      location / {
+          try_files $uri /index.html;
+      }
+  }
+  ```
+  This is a passive health check: a refused or timed-out connection marks the server failed for 5 s and sends the request to the other one. An HTTP 503 from a running API (central database down) is an answer, not a failure: it is not retried, so a central outage never marks both APIs failed. If `nginx -t` rejects `ip_hash` together with `resolve`, use `hash $remote_addr;` instead.
+- Two MirrorMaker 2 workers: `mm2-1` and `mm2-2` run the same `mm2.properties` in dedicated mode. For the flow `plant1->central` they form one Connect group through the flow's internal topics on central, share its tasks, and take over each other's. Each sets `hostname` to its service name, so the REST address it advertises resolves on the Docker networks. 768 MB each, the same heap (§3). Append to `mm2.properties` (§6):
+  ```properties
+  # R4: two dedicated workers. They forward task configs to the leader over internal REST (KIP-710)
+  dedicated.mode.enable.internal.rest = true
+  # hand a dead worker's tasks to the survivor after 10 s, not Connect's default 5 minutes
+  plant1->central.scheduled.rebalance.max.delay.ms = 10000
+  ```
+- `restart: on-failure`: already on every .NET service through the gateway and consumer anchors and on `api`. The new services keep it, and Step 3 checks it.
+- `drill.sh` (§10 drills 1–3): `central-down` kills `mm2-1 mm2-2 consumer-1 consumer-2`; `central-up` starts `central-kafka central-db consumer-1 consumer-2 mm2-1 mm2-2`; `wan-cut` and `wan-restore` disconnect and connect `edd-mm2-1-1` and `edd-mm2-2-1`.
+
+- [ ] **Step 1: See both single points fail (RED).** On the current stack, from `src/deployment/`:
+  - `docker compose kill api`, then `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/overview`. Expected: 502. Then `docker compose start api`.
+  - `docker compose kill mm2`, then run `docker compose exec central-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic plant1.machine.readings` twice, 10 s apart. Expected: no partition grows. Then `docker compose start mm2`.
+- [ ] **Step 2: Write** the Compose, nginx, MirrorMaker 2 and drill changes.
+- [ ] **Step 3: Check the configuration.** `docker compose config --format json | python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; print([n for n,v in s.items() if "build" in v and v.get("restart") != "on-failure"])'`. Expected: `[]`. Then `docker compose up -d --build --wait --remove-orphans` and `docker compose exec dashboard nginx -t`. Expected: `syntax is ok` and `test is successful`.
+- [ ] **Step 4: Verify live (GREEN):**
+  - `docker compose kill api-1`; then, once a second for 15 s, `curl -fsS --max-time 2 -o /dev/null http://localhost:3000/api/overview`. Expected: every call succeeds. `docker compose start api-1`, and repeat with `api-2`.
+  - `docker compose kill mm2-1`; 30 s and 40 s later, run the `kafka-get-offsets.sh` command above. Expected: every one of the 12 partitions grew between the two reads, because the dead worker's task moved to `mm2-2`; the dashboard's mirror lag is back under 2 s. Then `docker compose start mm2-1`.
+  - `scripts/drill.sh central-down`, wait 60 s, `scripts/drill.sh central-up`, then `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps. Then `scripts/drill.sh resume`.
+  - `docker stats --no-stream`. Expected: every container below its limit.
+- [ ] **Step 5: Commit.** `git commit -m "feat(deployment): run two APIs and two MirrorMaker 2 workers"`
+
+---
+
+## Stretch (only after the resilience tier)
 
 ### Stretch 3: WAN-cut and plant-down drills, plant-side alarm list
 
