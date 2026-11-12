@@ -56,15 +56,15 @@ public static class OverviewBuilder
         if (s.Central is not { } central || s.PlantEnd is not { } plant || s.Db is not { } db) return false;
         if (Health(central.At, now) is not Healthy || Health(plant.At, now) is not Healthy || Health(db.At, now) is not Healthy) return false;
         if (gateways.Any(g => g.Value.BufferedReadings + g.Value.BufferedAlarms != 0)) return false;
-        // The lag must be measured MirrorSettle after the last gateway went quiet, and the progress rows after the lag.
+        // The lag must be measured MirrorSettle after the last gateway went quiet, and the progress rows after the offsets were last
+        // known to be final. The run start, not the newest sample: an offsets poll finishing mid-query must not make an old DB sample stale.
         var quiet = s.Shops.Select(shop => s.SettledSince(shop)).ToList();
-        if (quiet.Any(q => q is null) || central.At < quiet.Max()!.Value + MirrorSettle || db.At < central.At) return false;
+        if (quiet.Any(q => q is null) || central.At < quiet.Max()!.Value + MirrorSettle || s.CentralStableSince is not { } stable || db.At < stable) return false;
         // Zero, not the 2 s tolerance of a live view: a record still in the mirror would otherwise read as a loss.
         return ConsumerLag(s) == 0 && (s.PlantNewest is null || MirrorLag(s) is <= 0);
     }
 
-    private static long ConsumerLag(Snapshot s) =>
-        s.Central is { Value: var o } ? o.End.Sum(e => Math.Max(0, e.Value - o.Committed.GetValueOrDefault(e.Key))) : 0;
+    private static long ConsumerLag(Snapshot s) => s.Central?.Value.Lag ?? 0;
 
     // Both tails empty means nothing was produced since the API started: no lag, not an unknown one.
     private static double? MirrorLag(Snapshot s) => (s.PlantNewest, s.CentralNewest) switch

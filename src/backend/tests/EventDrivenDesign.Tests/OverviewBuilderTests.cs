@@ -218,6 +218,36 @@ public class OverviewBuilderTests
         OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("WAIT");
     }
 
+    // The 2 s offsets poll can finish while the endpoint's DB query is running: the newest offsets are then a few ms newer
+    // than the DB sample, though the offsets themselves have not changed since the first of them.
+    [Fact]
+    public void Unchanged_offsets_sampled_again_after_the_database_started_still_pass()
+    {
+        var s = Settled(dbAt: Now - TimeSpan.FromMilliseconds(5));
+        s.SetCentral(Offsets(1000, 1000), Now - TimeSpan.FromSeconds(2));
+        s.SetCentral(Offsets(1000, 1000), Now);
+        OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("PASS");
+    }
+
+    [Fact]
+    public void A_record_that_lands_after_the_database_started_waits()
+    {
+        var s = Settled(dbAt: Now - TimeSpan.FromSeconds(1));
+        s.SetCentral(Offsets(1000, 1000), Now - TimeSpan.FromSeconds(2));
+        s.SetCentral(Offsets(1001, 1001), Now);
+        OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("WAIT");
+    }
+
+    [Fact]
+    public void Lag_that_reappeared_after_the_database_started_waits()
+    {
+        var s = Settled(dbAt: Now - TimeSpan.FromSeconds(2));
+        s.SetCentral(Offsets(1000, 1000), Now - TimeSpan.FromSeconds(3));
+        s.SetCentral(Offsets(1000, 990), Now - TimeSpan.FromSeconds(1));
+        s.SetCentral(Offsets(1000, 1000), Now);
+        OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("WAIT");
+    }
+
     [Fact]
     public void Lost_readings_fail_once_paused_and_drained()
     {

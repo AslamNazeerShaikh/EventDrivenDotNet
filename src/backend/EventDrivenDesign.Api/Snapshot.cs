@@ -8,7 +8,10 @@ namespace EventDrivenDesign.Api;
 public sealed record Stamped<T>(T Value, DateTimeOffset At);
 
 /// <summary>Per-partition latest offsets and the committed offsets of the writers' group.</summary>
-public sealed record OffsetSample(IReadOnlyDictionary<int, long> End, IReadOnlyDictionary<int, long> Committed);
+public sealed record OffsetSample(IReadOnlyDictionary<int, long> End, IReadOnlyDictionary<int, long> Committed)
+{
+    public long Lag => End.Sum(e => Math.Max(0, e.Value - Committed.GetValueOrDefault(e.Key)));
+}
 
 public sealed record DbSample(IReadOnlyList<ProgressRow> Progress, long Received, long Inserted);
 
@@ -24,6 +27,7 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
     private Stamped<long>? _plantEnd;
     private Stamped<OffsetSample>? _central;
     private Stamped<DbSample>? _db;
+    private long _centralStableTicks; // 0: no run
     private long _plantNewestTicks;
     private long _centralNewestTicks;
 
@@ -38,6 +42,9 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
     public Stamped<long>? PlantEnd => Volatile.Read(ref _plantEnd);
 
     public Stamped<OffsetSample>? Central => Volatile.Read(ref _central);
+
+    /// <summary>First sample of the current run of identical end offsets with nothing uncommitted: a DB sample started after it holds every record up to those offsets.</summary>
+    public DateTimeOffset? CentralStableSince => Newest(ref _centralStableTicks);
 
     public Stamped<DbSample>? Db => Volatile.Read(ref _db);
 
@@ -59,7 +66,14 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
 
     public void SetPlantEnd(long total, DateTimeOffset at) => Volatile.Write(ref _plantEnd, new(total, at));
 
-    public void SetCentral(OffsetSample sample, DateTimeOffset at) => Volatile.Write(ref _central, new(sample, at));
+    // One writer (the offsets loop). The run is written first: a reader that sees the new run with the old sample can only wait.
+    public void SetCentral(OffsetSample sample, DateTimeOffset at)
+    {
+        var same = _central?.Value is { } last && last.Lag == 0 && last.End.Count == sample.End.Count
+            && last.End.All(e => sample.End.TryGetValue(e.Key, out var v) && v == e.Value);
+        Volatile.Write(ref _centralStableTicks, sample.Lag != 0 ? 0 : same && _centralStableTicks != 0 ? _centralStableTicks : at.UtcTicks);
+        Volatile.Write(ref _central, new(sample, at));
+    }
 
     /// <summary><paramref name="startedAt"/> is when the query began. A result that began earlier than the stored one never replaces it.</summary>
     public void SetDb(DbSample sample, DateTimeOffset startedAt)
