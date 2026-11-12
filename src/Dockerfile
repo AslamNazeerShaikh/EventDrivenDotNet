@@ -1,28 +1,29 @@
+# Build from repo root with src as context: docker build -f src/Dockerfile src
 # 1) .NET build. SDK 11 image; hosts (Api/Producer/Consumer) land in Tasks 2-4.
 FROM mcr.microsoft.com/dotnet/sdk:11.0 AS dotnet
 WORKDIR /src
 COPY Directory.Build.props Directory.Packages.props EventDrivenDesign.slnx global.json ./
-COPY src/backend/EventDrivenDesign.Shared/*.csproj src/backend/EventDrivenDesign.Shared/
-COPY src/backend/EventDrivenDesign.Contracts/*.csproj src/backend/EventDrivenDesign.Contracts/
-COPY src/backend/EventDrivenDesign.Messaging/*.csproj src/backend/EventDrivenDesign.Messaging/
-COPY src/backend/EventDrivenDesign.Domain/*.csproj src/backend/EventDrivenDesign.Domain/
-COPY src/backend/EventDrivenDesign.Application/*.csproj src/backend/EventDrivenDesign.Application/
-COPY src/backend/EventDrivenDesign.Persistence/*.csproj src/backend/EventDrivenDesign.Persistence/
-COPY src/backend/EventDrivenDesign.Infrastructure/*.csproj src/backend/EventDrivenDesign.Infrastructure/
+COPY backend/EventDrivenDesign.Shared/*.csproj backend/EventDrivenDesign.Shared/
+COPY backend/EventDrivenDesign.Contracts/*.csproj backend/EventDrivenDesign.Contracts/
+COPY backend/EventDrivenDesign.Messaging/*.csproj backend/EventDrivenDesign.Messaging/
+COPY backend/EventDrivenDesign.Domain/*.csproj backend/EventDrivenDesign.Domain/
+COPY backend/EventDrivenDesign.Application/*.csproj backend/EventDrivenDesign.Application/
+COPY backend/EventDrivenDesign.Persistence/*.csproj backend/EventDrivenDesign.Persistence/
+COPY backend/EventDrivenDesign.Infrastructure/*.csproj backend/EventDrivenDesign.Infrastructure/
 COPY tests/EventDrivenDesign.Tests/*.csproj tests/EventDrivenDesign.Tests/
 RUN dotnet restore EventDrivenDesign.slnx
 COPY . .
 # shortcut: publish Api/Producer/Consumer hosts to /app/{api,producer,consumer} once those projects land.
 RUN for lib in Shared Contracts Messaging Domain Application Persistence Infrastructure; do \
-      dotnet publish src/backend/EventDrivenDesign.$lib -c Release --no-restore -o /app/libs; \
+      dotnet publish backend/EventDrivenDesign.$lib -c Release --no-restore -o /app/libs; \
     done
 
 # 2) React build (bun, never npm/node).
 FROM oven/bun:1 AS web
 WORKDIR /web
-COPY src/frontend/package.json src/frontend/bun.lock ./
+COPY frontend/package.json frontend/bun.lock ./
 RUN bun install
-COPY src/frontend/ ./
+COPY frontend/ ./
 RUN bun run build
 
 # 3) Kafka binaries and a JRE, taken from official images.
