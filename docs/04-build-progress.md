@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13 fix under re-review; Task 10b (alarms never stored) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13 done; Task 10b (alarms never stored) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -41,14 +41,14 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 10 | Consumer host, drain cap | Done (malformed and incomplete records quarantined, never stuck) | `31fa8a7`, `7107eed`, `3c37261` | Clean after 1 fix round |
 | 11 | MirrorMaker 2, end-to-end check | Done (live: 500 machines → PostgreSQL, 0 gaps, 0 duplicate rows, redelivery absorbed; regex fixed to POSIX `[0-9]+`) | `7566fd9`, `18de8cb` | Clean after 1 fix round |
 | 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
-| 13 | Control-room API | **Fix done; re-review running** (live: ETA null while central down; bad id → 400 ProblemDetails) | `d067b02`, `58ef5ac` | Re-review of `d067b02..58ef5ac` pending |
+| 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
 | 10b | Fix: central alarms never stored (found live in Task 13; the `central-alarms` group never forms) | **In progress** | — | — |
 | 14 | Dashboard | To do | — | — |
 | 15 | `drill.sh` | To do | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 139 unit and 12 integration tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: 142 unit and 12 integration tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
 
 ## 4. Rulings so far
 
@@ -102,7 +102,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** two things in parallel. (a) Task 13's re-review of `d067b02..58ef5ac`. (b) Task 10b: the Consumer host never starts its alarms loop, so the `alarms` table stays empty. The fix is root cause first with a failing test, then a live check (inject a fault → alarm row in PostgreSQL). Its report goes to `task-10b-report.md`. If lost, look for a commit `fix(consumer): run the alarms loop…`; otherwise re-dispatch from the ledger entry for Ruling 17. Then Task 14 (dashboard, `task-14-brief.md`).
+3. **Right now:** Task 10b: the Consumer host never starts its alarms loop, so the `alarms` table stays empty. The fix is root cause first with a failing test, then a live check (inject a fault → alarm row in PostgreSQL). Its report goes to `task-10b-report.md`. If lost, look for a commit `fix(consumer): run the alarms loop…`; otherwise re-dispatch from the ledger entry for Ruling 17. Then Task 14 (dashboard, `task-14-brief.md`).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
