@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 14b in progress (honest panel notes).
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:30 IST: Task 14b done; resilience tier design being written into docs 02, 00, 03.
 
 ## 1. Where things are
 
@@ -44,13 +44,13 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
 | 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | Done (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Clean |
 | 14 | Dashboard (+ the alarm-latency clamp as its own commit) | Done (live: green tiles, 500/s, outage hole, MM2 tile turns Degraded when lagging, banner on API loss, pause → PASS, Resume → WAIT at once) | `225c837`, `626ed6d`, `15686b1`, `44ef7e6` | Clean after 2 fix rounds |
-| 14b | Fix: honest panel notes during an outage | **In progress**. Long-running pages already keep last data; a page loaded during the outage claimed last data it never had. panelNote() + live evidence | — | Pending |
+| 14b | Fix: honest panel notes during an outage | Done. A page loaded during an outage now says 'No data yet. The central database did not answer. Retrying every second.'; a long-running page keeps its last data (live screenshots). screenshot.py gains --run/--after | `817d4b9`, `18b3fb8`, `2ff9d5a` | Clean after 1 fix round |
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | Done. Rehearsal PASS 184,700 = 184,700, 12,502 duplicates absorbed, cold start 12 s; README run section | `e8a272e`, `9289603` | Clean after 1 fix round |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: Tests on the branch: 146 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
+Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
 
 ## 4. Rulings so far
 
@@ -90,7 +90,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 ### Must fix before the demo
 
 - ~~Alarm latency shows slightly negative~~: fixed in `225c837` (clamped at 0, with a test).
-- `drill.sh proof`: a malformed poll body aborts with a Python traceback under `set -e` (use `|| drained=false`); add `--max-time 5` to the curl calls so a hung API cannot stall past the deadline.
+- ~~`drill.sh proof`: a malformed poll body aborted under `set -e`; curl had no time limit~~: fixed in `1f69cb0` (a bad body counts as not drained; `--max-time 5` on the poll, 10 on the POSTs). Live proof PASS 305,300 = 305,300.
 
 ## 6. Fallbacks (plan B for every risk)
 
@@ -109,7 +109,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** In order: (1) Task 14b (brief `task-14b-brief.md`, Ruling 23): `panelNote()` in format.ts, App uses it for the Chart, Proof and Alarms panels, 'Waiting for data…', live screenshots of a long-running and a fresh page during central-down; screenshot.py gains --run/--after. (2) The should-fix list below. (3) Resilience tier R1–R4 (section 5). (4) Final whole-branch review on Opus.
+3. **Right now:** In order: (1) Resilience tier R1–R4 (section 5): the design is being written into docs 02, 00 and 03 (report `resilience-docs-report.md`); review it, then build R1 → R2 → R3, and R4, via SDD. (2) Final whole-branch review on Opus (deferred minors are in the ledger).
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
