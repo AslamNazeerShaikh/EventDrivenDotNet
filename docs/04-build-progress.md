@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 15 built (main story PASS live) and under review; Task 13b (proof verdict flicker) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 15 done; Task 13b (proof verdict flicker) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -45,7 +45,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | Done (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Clean |
 | 14 | Dashboard (+ the alarm-latency clamp as its own commit) | Done (live: green tiles, 500/s, outage hole, MM2 tile turns Degraded when lagging, banner on API loss, pause → PASS, Resume → WAIT at once) | `225c837`, `626ed6d`, `15686b1`, `44ef7e6` | Clean after 2 fix rounds |
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | **In progress** | — | — |
-| 15 | `drill.sh` | **Built; review running** (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Pending |
+| 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
@@ -89,6 +89,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 ### Must fix before the demo
 
 - ~~Alarm latency shows slightly negative~~: fixed in `225c837` (clamped at 0, with a test).
+- `drill.sh proof`: a malformed poll body aborts with a Python traceback under `set -e` (use `|| drained=false`); add `--max-time 5` to the curl calls so a hung API cannot stall past the deadline.
 
 ## 6. Fallbacks (plan B for every risk)
 
@@ -107,7 +108,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** two things in parallel. (a) Task 15's review (range `150d468..f3e0975`). (b) Task 13b: the API's `drained` flag flickers once settled, so the dashboard proof alternates PASS/WAIT. The fix is root cause first with a failing test, then a live check that PASS holds for 60 s. Its report goes to `task-13b-report.md`. If lost, look for a commit `fix(api): stable drained verdict…`; otherwise re-dispatch from ledger Ruling 20. Then Task 16 (cold-start rehearsal, README, `task-16-brief.md`).
+3. **Right now:** Task 13b: the API's `drained` flag flickers once settled, so the dashboard proof alternates PASS/WAIT. The fix is root cause first with a failing test, then a live check that PASS holds for 60 s. Its report goes to `task-13b-report.md`. If lost, look for a commit `fix(api): stable drained verdict…`; otherwise re-dispatch from ledger Ruling 20. Then Task 16 (cold-start rehearsal, README, `task-16-brief.md`).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
