@@ -1,4 +1,6 @@
-import { useAlarms, useChart, useOverview, useReconciliation } from "./api";
+import { useAlarms, useChart, useFullCheck, useOverview, useReconciliation } from "./api";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { useNow } from "./useNow";
 import { agoText } from "./format";
 import { AlarmsPanel } from "./panels/AlarmsPanel";
 import { BuffersLag } from "./panels/BuffersLag";
@@ -14,6 +16,8 @@ export default function App() {
   const proof = useReconciliation();
   const chart = useChart();
   const alarms = useAlarms();
+  const full = useFullCheck(proof.data);
+  const clock = useNow();
   // Server time keeps "last seen" and the chart window in step with device times, and freezes with the data.
   const nowMs = overview.data ? Date.parse(overview.data.at) : Date.now();
   const paused = overview.data ? overview.data.gateways.length > 0 && overview.data.gateways.every((g) => g.paused) : undefined;
@@ -28,16 +32,26 @@ export default function App() {
         <p role="alert" className="rounded border-2 border-red-500 bg-red-950 px-3 py-2 font-semibold text-red-200">
           API unreachable.{" "}
           {overview.data
-            ? `Showing data from ${new Date(overview.data.at).toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" })} UTC (${agoText(overview.data.at, Date.now())}). Retrying every second.`
+            ? `Showing data from ${new Date(overview.data.at).toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" })} UTC (${agoText(overview.data.at, clock)}). Retrying every second.`
             : "Retrying every second."}
         </p>
       )}
-      <PipelineStrip overview={overview.data} nowMs={nowMs} />
+      <ErrorBoundary label="Pipeline" resetKey={overview.dataUpdatedAt}>
+        <PipelineStrip overview={overview.data} nowMs={nowMs} />
+      </ErrorBoundary>
       <div className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-2">
-        <BuffersLag overview={overview.data} />
-        <ReadingsChart chart={chart.data} nowMs={nowMs} note={stale(chart)} />
-        <ProofPanel proof={proof.data} note={stale(proof)} />
-        <AlarmsPanel alarms={alarms.data} paused={paused} note={stale(alarms)} />
+        <ErrorBoundary label="Buffers and lag" resetKey={overview.dataUpdatedAt}>
+          <BuffersLag overview={overview.data} />
+        </ErrorBoundary>
+        <ErrorBoundary label="Chart" resetKey={chart.dataUpdatedAt}>
+          <ReadingsChart chart={chart.data} nowMs={nowMs} note={stale(chart)} />
+        </ErrorBoundary>
+        <ErrorBoundary label="Proof" resetKey={proof.dataUpdatedAt}>
+          <ProofPanel proof={proof.data} full={full} nowMs={clock} note={stale(proof)} />
+        </ErrorBoundary>
+        <ErrorBoundary label="Alarms" resetKey={alarms.dataUpdatedAt}>
+          <AlarmsPanel alarms={alarms.data} paused={paused} note={stale(alarms)} />
+        </ErrorBoundary>
       </div>
     </main>
   );

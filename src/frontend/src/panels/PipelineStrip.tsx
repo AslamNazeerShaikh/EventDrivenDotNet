@@ -1,5 +1,5 @@
 import type { Overview, ServiceHealth } from "../api";
-import { agoText, formatInt, formatSeconds, isStale } from "../format";
+import { agoText, formatInt, formatSeconds, isStale, mirrorHealth } from "../format";
 import { HealthBadge, Panel } from "./ui";
 
 interface Stage {
@@ -27,7 +27,6 @@ function stages(o: Overview, nowMs: number): Stage[] {
   const allPaused = o.gateways.length > 0 && o.gateways.every((g) => g.paused);
   const buffered = o.gateways.reduce((n, g) => n + g.bufferedReadings + g.bufferedAlarms, 0);
   const oldestMs = Math.max(0, ...o.gateways.map((g) => g.oldestUnsentAgeMs));
-  const mirror = o.mirrorLagSeconds;
   const newest = (t: string | null) => (t === null ? "no data" : agoText(t, nowMs));
   return [
     {
@@ -59,11 +58,10 @@ function stages(o: Overview, nowMs: number): Stage[] {
     },
     {
       name: "MirrorMaker 2",
-      health: null,
-      fallbackLabel: mirror === null ? "No data" : mirror <= 10 ? "Healthy" : "Lagging",
+      health: mirrorHealth(o.mirrorLagSeconds),
       rate: null,
       rateUnit: "",
-      backlog: `mirror lag ${formatSeconds(mirror)}`,
+      backlog: `mirror lag ${formatSeconds(o.mirrorLagSeconds)}`,
       freshness: "",
     },
     {

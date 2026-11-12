@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { shouldRequestFull } from "./format";
 
 // Wire types mirror src/backend/EventDrivenDesign.Contracts (camelCase, DateTimeOffset as ISO strings).
 export type ServiceHealth =
@@ -125,11 +127,39 @@ async function post(path: string, body?: unknown): Promise<void> {
   if (!res.ok) throw await failure(res);
 }
 
-const poll = { refetchInterval: 1000, retry: false } as const;
+const poll = { refetchInterval: 1000, refetchIntervalInBackground: true, retry: false } as const;
 
 export const useOverview = () => useQuery({ queryKey: ["overview"], queryFn: () => get<Overview>("/api/overview"), ...poll });
+// The polled call is the light one. The full call counts duplicate rows across the whole table, so see useFullCheck.
 export const useReconciliation = () =>
-  useQuery({ queryKey: ["reconciliation"], queryFn: () => get<Reconciliation>("/api/reconciliation?full=true"), ...poll });
+  useQuery({ queryKey: ["reconciliation"], queryFn: () => get<Reconciliation>("/api/reconciliation"), ...poll });
+
+// The full reconciliation (duplicate rows, per-machine table) on demand, and automatically at most every 10 s
+// while the plant is paused and drained. A failed attempt counts too, so a slow scan is not hammered.
+export function useFullCheck(light: Reconciliation | undefined) {
+  const [result, setResult] = useState<{ data: Reconciliation; at: number } | undefined>();
+  const [pending, setPending] = useState(false);
+  const busy = useRef(false);
+  const lastAttempt = useRef<number | null>(null);
+  const check = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+    lastAttempt.current = Date.now();
+    setPending(true);
+    try {
+      setResult({ data: await get<Reconciliation>("/api/reconciliation?full=true"), at: Date.now() });
+    } catch {
+      // keep the previous result; the light poll and the banner report API trouble
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (shouldRequestFull(light, lastAttempt.current, Date.now())) void check();
+  }, [light, check]);
+  return { result, pending, check };
+}
 export const useChart = () => useQuery({ queryKey: ["chart"], queryFn: () => get<Chart>("/api/chart?minutes=10"), ...poll });
 export const useAlarms = () => useQuery({ queryKey: ["alarms"], queryFn: () => get<AlarmView[]>("/api/alarms"), ...poll });
 

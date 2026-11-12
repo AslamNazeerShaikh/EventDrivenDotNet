@@ -22,7 +22,8 @@ const TONE = {
   Down: { dot: "bg-red-400", text: "text-red-300", border: "border-red-500" },
 } as const;
 
-export const toneOf = (h: ServiceHealth) => TONE[h.$type];
+// An unknown $type from a newer API degrades to the amber tone instead of crashing the render.
+export const toneOf = (h: ServiceHealth) => TONE[h.$type] ?? TONE.Degraded;
 
 // Colour plus a text label: the label is the signal, the colour only helps.
 export function HealthBadge({ health, nowMs }: { health: ServiceHealth; nowMs: number }) {

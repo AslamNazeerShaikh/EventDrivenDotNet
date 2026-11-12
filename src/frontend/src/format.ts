@@ -1,4 +1,4 @@
-import type { ChartPoint, ServiceHealth } from "./api";
+import type { ChartPoint, Reconciliation, ServiceHealth } from "./api";
 
 const BUCKET_MS = 5000;
 // The API reports a source it has never seen as the Unix epoch; anything before 2000 means "never".
@@ -23,6 +23,8 @@ export function healthLabel(h: ServiceHealth, nowMs: number): string {
       const ago = agoText(h.lastSeen, nowMs);
       return ago === "never" ? "Down, never seen" : `Down, last seen ${ago}`;
     }
+    default:
+      return "Unknown";
   }
 }
 
@@ -54,4 +56,23 @@ export function fillBuckets(points: readonly ChartPoint[], nowMs: number, minute
     });
   }
   return out;
+}
+
+// MirrorMaker 2 reports no health of its own: derive it from how far central's newest device time trails the plant's.
+export const MIRROR_LAG_LIMIT_S = 10;
+export function mirrorHealth(lagSeconds: number | null): ServiceHealth {
+  if (lagSeconds === null) return { $type: "Degraded", reason: "no data" };
+  return lagSeconds > MIRROR_LAG_LIMIT_S ? { $type: "Degraded", reason: "lagging" } : { $type: "Healthy" };
+}
+
+// The duplicate scan reads the whole readings table, so it runs only once the plant is paused and drained,
+// and at most once per minGapMs while that holds.
+export function shouldRequestFull(
+  light: Pick<Reconciliation, "paused" | "drained"> | undefined,
+  lastAttemptMs: number | null,
+  nowMs: number,
+  minGapMs = 10_000,
+): boolean {
+  if (!light || !light.paused || !light.drained) return false;
+  return lastAttemptMs === null || nowMs - lastAttemptMs >= minGapMs;
 }

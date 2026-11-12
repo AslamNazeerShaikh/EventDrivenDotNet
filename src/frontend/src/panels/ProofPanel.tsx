@@ -9,10 +9,24 @@ const VERDICT: Record<Verdict, { symbol: string; text: string; cls: string; hint
   FAIL: { symbol: "✖", text: "FAIL", cls: "border-red-500 text-red-300", hint: "A reading is missing, out of sequence or duplicated." },
 };
 
-export function ProofPanel({ proof, note }: { proof: Reconciliation | undefined; note?: string | undefined }) {
+const UNKNOWN = { symbol: "?", text: "UNKNOWN", cls: "border-amber-500 text-amber-300", hint: "The API sent a verdict this page does not know." };
+// A full check this young is newer than the light poll's view of duplicates, so its verdict wins.
+const FRESH_MS = 15_000;
+
+interface FullCheck {
+  result: { data: Reconciliation; at: number } | undefined;
+  pending: boolean;
+  check: () => void;
+}
+
+export function ProofPanel({ proof, full, nowMs, note }: { proof: Reconciliation | undefined; full: FullCheck; nowMs: number; note?: string | undefined }) {
   const [open, setOpen] = useState(false);
   if (!proof) return <Panel title="Proof" note={note}><p className="text-muted">Waiting for the API…</p></Panel>;
-  const v = VERDICT[proof.verdict];
+  const checked = full.result;
+  const fresh = checked !== undefined && nowMs - checked.at < FRESH_MS;
+  const verdict = fresh ? checked.data.verdict : proof.verdict;
+  const v = VERDICT[verdict] ?? UNKNOWN;
+  const duplicateRows = checked?.data.duplicateRows ?? proof.duplicateRows;
   const machines = [...proof.machines].sort((a, b) => b.missing + b.gaps - (a.missing + a.gaps) || a.machineId.localeCompare(b.machineId));
   return (
     <Panel title="Proof" note={note}>
@@ -22,7 +36,19 @@ export function ProofPanel({ proof, note }: { proof: Reconciliation | undefined;
           <Stat label="Stored" value={formatInt(proof.stored)} />
           <Stat label="Missing" value={formatInt(proof.missing)} />
           <Stat label="Gaps" value={formatInt(proof.gaps)} />
-          <Stat label="Duplicate rows" value={proof.duplicateRows === null ? "—" : formatInt(proof.duplicateRows)} />
+          <Stat
+            label="Duplicate rows"
+            value={
+              duplicateRows === null ? (
+                "not checked"
+              ) : (
+                <>
+                  {formatInt(duplicateRows)}
+                  {checked && <span className="block text-xs font-normal text-muted">checked {Math.max(0, Math.round((nowMs - checked.at) / 1000))} s ago</span>}
+                </>
+              )
+            }
+          />
           <Stat label="Duplicates absorbed" value={formatInt(proof.duplicatesAbsorbed)} />
         </dl>
         <div role="status" aria-label={`Verdict ${v.text}`} className={`rounded-lg border-2 px-5 py-3 text-center ${v.cls}`}>
@@ -35,6 +61,15 @@ export function ProofPanel({ proof, note }: { proof: Reconciliation | undefined;
       <p className="mt-2 text-sm text-slate-300">
         {v.hint} Plant {proof.paused ? "paused" : "running"}; {proof.drained ? "drained" : "not drained"}.
       </p>
+      <button
+        type="button"
+        onClick={full.check}
+        disabled={full.pending}
+        className="mt-3 rounded border border-line bg-ink px-3 py-1.5 text-sm font-medium hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {full.pending ? "Checking duplicates…" : "Check duplicates"}
+      </button>
+      <p className="mt-1 text-xs text-muted">Scans every stored row. Runs by itself, at most every 10 s, once the plant is paused and drained.</p>
       <details className="mt-3" onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary className="cursor-pointer text-sm text-sky-300">Per-machine table ({formatInt(proof.machines.length)} machines)</summary>
         {open && (

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale } from "./format";
+import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, shouldRequestFull } from "./format";
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
 
@@ -76,4 +76,22 @@ describe("fillBuckets", () => {
     const out = fillBuckets([{ bucketStart: "2026-11-12T11:59:30+00:00", readings: 9, provisional: false }], end, 1, null);
     expect(out.find((p) => p.bucketStart === iso(30))!.readings).toBe(9);
   });
+});
+
+describe("mirrorHealth", () => {
+  test("no data is degraded", () => expect(mirrorHealth(null)).toEqual({ $type: "Degraded", reason: "no data" }));
+  test("small lag is healthy", () => expect(mirrorHealth(0)).toEqual({ $type: "Healthy" }));
+  test("exactly the limit is still healthy", () => expect(mirrorHealth(10)).toEqual({ $type: "Healthy" }));
+  test("over the limit is lagging", () => expect(mirrorHealth(10.1)).toEqual({ $type: "Degraded", reason: "lagging" }));
+  test("a clock slightly ahead (negative lag) is healthy", () => expect(mirrorHealth(-0.4)).toEqual({ $type: "Healthy" }));
+});
+
+describe("shouldRequestFull", () => {
+  const settled = { paused: true, drained: true };
+  test("never before the light response arrives", () => expect(shouldRequestFull(undefined, null, NOW)).toBe(false));
+  test("not while running", () => expect(shouldRequestFull({ paused: false, drained: false }, null, NOW)).toBe(false));
+  test("not while paused but still draining", () => expect(shouldRequestFull({ paused: true, drained: false }, null, NOW)).toBe(false));
+  test("the first time paused and drained", () => expect(shouldRequestFull(settled, null, NOW)).toBe(true));
+  test("not again within 10 s", () => expect(shouldRequestFull(settled, NOW - 9_999, NOW)).toBe(false));
+  test("again after 10 s", () => expect(shouldRequestFull(settled, NOW - 10_000, NOW)).toBe(true));
 });
