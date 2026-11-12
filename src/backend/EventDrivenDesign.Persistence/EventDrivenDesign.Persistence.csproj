@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RootNamespace>EventDrivenDesign.Persistence</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" />
-  </ItemGroup>
-</Project>
