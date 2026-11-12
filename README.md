@@ -9,6 +9,61 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 | 1 | [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md) | Build spec for the demo: containers, contracts, services, drills, tests, build plan |
 | 2 | [`docs/01-second-round-design-exercise.md`](docs/01-second-round-design-exercise.md) | The exercise brief and what it asks |
 | 3 | [`docs/02-solution-design.md`](docs/02-solution-design.md) | The solution design: architecture, the twelve aspects, sizing, trade-offs |
+| 4 | [`docs/03-implementation-plan.md`](docs/03-implementation-plan.md) | The task-by-task build plan |
+| 5 | [`docs/04-build-progress.md`](docs/04-build-progress.md) | What is built, what is left, and the test counts |
+
+## Run the demo
+
+### Prerequisites
+
+1. Docker Desktop with its memory set to 10 GB (the containers' limits add up to about 5.1 GB).
+2. Nothing else to run the demo. The .NET SDK 11.0.100 and Bun 1.4.4 are needed only to develop or run the tests.
+
+### Start
+
+From the repo root:
+
+```sh
+cd src/deployment
+docker compose down -v                  # optional: a cold start from empty volumes
+docker compose up -d --build --wait
+```
+
+Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:3000> and give it a minute: five gateways healthy, about 500 readings per second.
+
+### Drills
+
+Run these from `src/deployment/` (the script works from anywhere). Each one prints the Docker command it runs, so the panel sees what is being broken.
+
+| # | Command | What the panel sees |
+| --- | --- | --- |
+| 1 | `scripts/drill.sh central-down` | Central Kafka, the consumers and the database go Down. The plant keeps writing, and its alarms stay live. Mirror lag grows |
+| 2 | `scripts/drill.sh central-up` | Mirror lag clears in seconds, then the database drains as its ETA counts down. The chart's gap fills in |
+| 3 | `scripts/drill.sh kill-gateway BDY` | The gateway restarts and its sequence numbers continue |
+| 4 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
+| 5 | `scripts/drill.sh pause` / `resume` | Stops or restarts all simulated machines |
+
+To show the alarm lane, inject an alarm during the drain: `src/scripts/live/api.sh fault P1-MCH-C017 Vibration`. It reaches central within seconds.
+
+### The proof
+
+```sh
+scripts/drill.sh proof
+```
+
+It pauses the plant, waits until every buffer and lag is drained, then prints the reconciliation and exits 0 on PASS. PASS means, for every machine, generated equals stored, with 0 gaps and 0 duplicate rows. The duplicates-absorbed count shows how many redeliveries the unique `(machine_id, seq)` key swallowed. While anything is still buffered or lagging, the verdict is WAIT, never PASS.
+
+### Stop
+
+```sh
+docker compose down        # keeps the volumes; add -v to delete them
+```
+
+### More
+
+1. [`src/scripts/README.md`](src/scripts/README.md): the developer and agent scripts (tests, API calls, screenshots).
+2. [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md) section 14 is the 12-minute demo script and section 10 lists every drill.
+3. [`docs/01-second-round-design-exercise.md`](docs/01-second-round-design-exercise.md), [`docs/02-solution-design.md`](docs/02-solution-design.md), [`docs/03-implementation-plan.md`](docs/03-implementation-plan.md) and [`docs/04-build-progress.md`](docs/04-build-progress.md) hold the brief, the design, the plan and the progress.
 
 ## Approach
 
