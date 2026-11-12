@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 15 done; Task 13b (proof verdict flicker) being fixed. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13b done; reusable scripts added under `src/scripts/`; Task 16 (rehearsal) next.
 
 ## 1. Where things are
 
@@ -44,12 +44,12 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
 | 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | Done (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Clean |
 | 14 | Dashboard (+ the alarm-latency clamp as its own commit) | Done (live: green tiles, 500/s, outage hole, MM2 tile turns Degraded when lagging, banner on API loss, pause → PASS, Resume → WAIT at once) | `225c837`, `626ed6d`, `15686b1`, `44ef7e6` | Clean after 2 fix rounds |
-| 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | **In progress** | — | — |
+| 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 143 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: 146 unit, 13 integration and 40 frontend (`bun test`) tests passing, 0 warnings (after Task 13b). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
 
 ## 4. Rulings so far
 
@@ -108,10 +108,13 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 13b: the API's `drained` flag flickers once settled, so the dashboard proof alternates PASS/WAIT. The fix is root cause first with a failing test, then a live check that PASS holds for 60 s. Its report goes to `task-13b-report.md`. If lost, look for a commit `fix(api): stable drained verdict…`; otherwise re-dispatch from ledger Ruling 20. Then Task 16 (cold-start rehearsal, README, `task-16-brief.md`).
-4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
-   - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
-   - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
+3. **Right now:** Task 16 (cold-start rehearsal, memory check, README) from `task-16-brief.md`. If the result is lost, check `git log` for `docs: add demo run instructions`. If it exists, review it against the brief; otherwise re-dispatch it. Then the resilience tier R1–R4 (section 5), then the final whole-branch review and the should-fix list in section 5.
+4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
+   - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
+   - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
+   - `live/api.sh` against the running stack;
+   - `progress/progress.py` for this file;
+   - `git/commit-push.sh "<subject>" [paths]` to commit, scan for private data and push.
 5. After Task 16: write R1–R4 into docs 02, 00 and 03 (section 5 has the content), commit, then build R1 to R4 the same way.
 6. Keep the rules: test-first, one commit per task in Conventional Commits with the `Co-Authored-By` trailer, and review before the next task. Since 13 November the user wants every step committed **and pushed** to `origin/feat/plant-demo`, together with a progress update; scan for private data before each push.
 7. Update this file after every step and commit it (`docs: update build progress`).

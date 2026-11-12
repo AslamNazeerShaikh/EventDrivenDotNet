@@ -604,6 +604,7 @@ Nothing project-related lives at the repo root or directly under `src/`. The roo
 | 1 | .NET: solutions, projects, `Directory.*.props`, `global.json`, backend tests and their `TestResults` | `src/backend/` | No `.csproj`, `.slnx`, props file, or backend test output outside it |
 | 2 | Web: app code, `package.json`, `bun.lock`, frontend tests and coverage | `src/frontend/` | No frontend file outside it |
 | 3 | Runtime: `Dockerfile`, `compose.yaml`, Kafka, PostgreSQL and nginx configs, drill scripts | `src/deployment/` | No CI/CD, Docker, or environment config outside it |
+| 4 | Tooling for developers and agents: diagram generation and checks, test runners, progress-doc and git helpers, live API probes ([index](../src/scripts/README.md)) | `src/scripts/` | No ad-hoc scripts in scratch folders or docs; the demo's own `drill.sh` stays in `src/deployment/` |
 
 `src/deployment/` replaces the old `deploy/` name. Backend tests live in `src/backend/tests/`, not in `src/tests/`.
 
@@ -632,6 +633,7 @@ EventDrivenArchitecture/
    │     ├─ EventDrivenDesign.IntegrationTests/
    │     └─ EventDrivenDesign.E2ETests/
    ├─ frontend/                        # everything web: React + Vite + TypeScript + Tailwind, Bun
+   ├─ scripts/                         # reusable tooling: build/, live/, diagrams/, progress/, git/, sdd/
    └─ deployment/                      # everything runtime. Docker context is src/
       ├─ Dockerfile                    # targets: gateway, consumer, api, dashboard
       ├─ compose.yaml
