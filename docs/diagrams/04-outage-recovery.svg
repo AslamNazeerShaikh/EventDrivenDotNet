@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="04-outage-recovery-title 04-outage-recovery-desc" id="d-04-outage-recovery-root">
+        <title id="04-outage-recovery-title">Six-hour central outage, hour by hour</title>
+        <desc id="04-outage-recovery-desc">Gantt chart of a six-hour central outage: the plant Kafka cluster holds the 10.8 GB backlog while the plant view stays live, MirrorMaker 2 copies the backlog in about fifteen minutes once central returns, alarms flow on their own lane, and the store writers catch up two hours later with no missing or duplicate readings.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #d-04-outage-recovery-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #d-04-outage-recovery-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #d-04-outage-recovery-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#d-04-outage-recovery-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="d-04-outage-recovery-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="d-04-outage-recovery-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="d-04-outage-recovery-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- Hour gridlines (hairline), skipping the three milestone hours -->
+        <g stroke="#2d3142" stroke-width="0.6" stroke-opacity="0.07">
+          <line x1="440" y1="112" x2="440" y2="512"/>
+          <line x1="540" y1="112" x2="540" y2="512"/>
+          <line x1="640" y1="112" x2="640" y2="512"/>
+          <line x1="740" y1="112" x2="740" y2="512"/>
+          <line x1="840" y1="112" x2="840" y2="512"/>
+          <line x1="1040" y1="112" x2="1040" y2="512"/>
+          <line x1="1240" y1="112" x2="1240" y2="512"/>
+        </g>
+
+        <!-- Milestone lines (behind bars) -->
+        <line x1="340" y1="112" x2="340" y2="512" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="940" y1="112" x2="940" y2="512" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="1140" y1="112" x2="1140" y2="512" stroke="#bf4520" stroke-width="1" stroke-dasharray="4,3"/>
+
+        <!-- Axis: title, hour ticks, baseline -->
+        <text x="40" y="104" fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.14em">HOURS SINCE THE OUTAGE STARTS</text>
+        <g fill="#5a6580" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">
+          <text x="340" y="104">00:00</text>
+          <text x="440" y="104">01:00</text>
+          <text x="540" y="104">02:00</text>
+          <text x="640" y="104">03:00</text>
+          <text x="740" y="104">04:00</text>
+          <text x="840" y="104">05:00</text>
+          <text x="940" y="104">06:00</text>
+          <text x="1040" y="104">07:00</text>
+          <text x="1140" y="104">08:00</text>
+          <text x="1240" y="104">09:00</text>
+        </g>
+        <line x1="340" y1="112" x2="1240" y2="112" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.20"/>
+
+        <!-- Milestones: diamond + label above the hour tick -->
+        <polygon points="340,79 345,84 340,89 335,84" fill="#4f5d75"/>
+        <text x="340" y="68" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">central down</text>
+        <polygon points="940,79 945,84 940,89 935,84" fill="#4f5d75"/>
+        <text x="940" y="68" fill="#2d3142" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">central back</text>
+        <polygon points="1140,78 1146,84 1140,90 1134,84" fill="#bf4520"/>
+        <text x="1240" y="68" fill="#bf4520" font-size="9" font-weight="600" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end">caught up · 0 missing · 0 duplicates</text>
+
+        <!-- ─── ROWS ─── -->
+        <!-- Row 1 (top 120, c 148): Central site down 00:00-06:00 -->
+        <text x="40" y="152" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Central site down</text>
+        <rect x="340" y="136" width="600" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="340" y="136" width="600" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Row 2 (top 176, c 204) FOCAL: Plant Kafka holds the backlog 00:00-06:15 -->
+        <text x="40" y="202" fill="#bf4520" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Plant Kafka holds the backlog</text>
+        <text x="40" y="215" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">grows to 10.8 M readings ≈ 10.8 GB</text>
+        <rect x="340" y="192" width="625" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="340" y="192" width="625" height="24" rx="4" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.12"/>
+
+        <!-- Row 3 (top 232, c 260): Plant operations view stays live 00:00-09:00 -->
+        <text x="40" y="264" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Plant operations view stays live</text>
+        <rect x="340" y="248" width="900" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="340" y="248" width="900" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Row 4 (top 288, c 316): MirrorMaker 2 copies the backlog 06:00-06:15 -->
+        <text x="40" y="314" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">MirrorMaker 2 copies the backlog</text>
+        <text x="40" y="327" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">WAN-bound · ≈15 min at 100 Mbit/s</text>
+        <rect x="940" y="304" width="25" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="940" y="304" width="25" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Row 5 (top 344, c 372): Alarms reach central 06:00-09:00 -->
+        <text x="40" y="370" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Alarms reach central</text>
+        <text x="40" y="383" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">separate lane · seconds behind</text>
+        <rect x="940" y="360" width="300" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="940" y="360" width="300" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Row 6 (top 400, c 428): Store writers drain into the database 06:00-08:00 -->
+        <text x="40" y="426" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Store writers drain into the database</text>
+        <text x="40" y="439" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace">4× live rate · backlog clears in 2 h</text>
+        <rect x="940" y="416" width="200" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="940" y="416" width="200" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Row 7 (top 456, c 484): Outage-window reports provisional 00:00-08:00 -->
+        <text x="40" y="488" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', system-ui, sans-serif">Outage-window reports provisional</text>
+        <rect x="340" y="472" width="800" height="24" rx="4" fill="#f5f5f5"/>
+        <rect x="340" y="472" width="800" height="24" rx="4" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+
+        <!-- Callout: italic serif aside in the bottom margin, leader to the foot of the 08:00 line -->
+        <text x="1120" y="548" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="end">Catch-up time = outage ÷ (capacity − 1).</text>
+        <text x="1120" y="568" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif" text-anchor="end">At 4× capacity, six hours clear in two.</text>
+        <path d="M 1126 543 Q 1140 543 1140 520" fill="none" stroke="#2d3142" stroke-width="1" stroke-dasharray="4,3" stroke-opacity="0.40"/>
+        <circle cx="1140" cy="516" r="2" fill="#2d3142"/>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="632" x2="1240" y2="632" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="40" y="652" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="664" width="20" height="12" rx="3" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.12"/>
+        <text x="68" y="673" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Backlog held at the plant</text>
+
+        <rect x="240" y="664" width="20" height="12" rx="3" fill="#4f5d75" stroke="#4f5d75" stroke-width="1" fill-opacity="0.15"/>
+        <text x="268" y="673" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Activity span</text>
+
+        <polygon points="388,665 393,670 388,675 383,670" fill="#4f5d75"/>
+        <line x1="400" y1="670" x2="420" y2="670" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="428" y="673" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Milestone</text>
+
+        <polygon points="528,664 534,670 528,676 522,670" fill="#bf4520"/>
+        <line x1="540" y1="670" x2="560" y2="670" stroke="#bf4520" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="568" y="673" fill="#4f5d75" font-size="9" font-family="'Geist', system-ui, sans-serif">Recovery complete</text>
+      </svg>
