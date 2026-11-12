@@ -198,7 +198,7 @@ CREATE TABLE machine_state (
 );
 ```
 
-The rules that make the buffer safe:
+The buffer is a transactional outbox: the reading, its sequence number and the machine's state commit in one local transaction, and a relay (the sender) publishes and deletes only after the broker acknowledges. The rules that make the buffer safe:
 
 1. **One writer.** A single thread owns every write, so the buffer never sees lock contention.
 2. **One transaction per tick.** Each second's readings and the updated `machine_state` rows commit together, which costs about one fsync per second. A crash can never leave a sequence number in use without its reading, or a reading without its number.
@@ -254,7 +254,19 @@ The Kafka client on its own gives up on a message after `message.timeout.ms`, wh
 
 ### 4.6 Duplicate handling
 
-At-least-once delivery means resends, and resends mean duplicates. They are removed at exactly one place.
+At-least-once delivery means resends, and resends mean duplicates. Every hop is idempotent, so a repeat changes nothing:
+
+| # | Hop | Repeat that can happen | What makes the repeat harmless | Proven by |
+| --- | --- | --- | --- | --- |
+| 1 | Machine history → gateway | A re-read of a sample the gateway already holds | The gateway skips samples at or before `last_device_time_ms` | Backfill test |
+| 2 | Control room → gateway | Pause, resume or a fault sent twice | Pause and resume set a persisted flag; a fault on a signal that is already faulted is ignored | Gateway-control and simulator tests |
+| 3 | Gateway → plant Kafka, one session | The client retries a send | Idempotent producer | Producer-settings test |
+| 4 | Gateway restart → plant Kafka | Rows acknowledged but not yet deleted are sent again | The `(machine_id, seq)` key at the sink | Sender and store tests |
+| 5 | MirrorMaker 2 restart | Records copied again from the last saved offset | The same key | Central-down drill |
+| 6 | Store writer crash | The batch committed but its offset did not | The same key, with the counters in the same transaction (an idempotent consumer) | "Every reading twice is stored once" test |
+| 7 | A malformed record delivered again | The same offset rejected twice | `rejected_records` keyed by `(topic, partition, offset)` | Store test |
+
+Duplicates of readings are removed at exactly one place.
 
 ![Where duplicates come from: gateway resends, MirrorMaker 2 restarts and store writer crashes all lead to one unique key on (machine_id, seq) in the central database, which inserts each reading once and counts the duplicates it skipped. Client retries and history backfill are stopped before the key.](diagrams/05-duplicates.svg)
 

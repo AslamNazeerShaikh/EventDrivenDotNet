@@ -290,6 +290,8 @@ Machine IDs are `P1-{SHOP}-{type letter}{nnn}`, numbered 001 to 100 within each 
 
 The schema and the five rules are in doc 02 §4.2: WAL, `synchronous=FULL`, incremental auto-vacuum, an `outbox` table with an alarm lane and a reading lane, and a `machine_state` table. Add a one-row `gateway_state (paused INTEGER NOT NULL)` table.
 
+The buffer is a **transactional outbox**: a reading, its sequence number and the machine's state commit in one SQLite transaction, and the sender relays rows to Kafka and deletes them only after the broker's acknowledgement.
+
 - **One writer.** A single long-lived connection on a dedicated thread owns every write. The collector and the sender submit `WriteTick` and `DeleteAcked` operations through a bounded `Channel` with `FullMode.Wait`, and the writer thread uses the synchronous ADO.NET API.
 - **Reads.** The sender reads on its own connection; WAL lets reads run alongside writes.
 - **File location.** `Buffer__Path=/data/buffer.db` on the gateway's named volume. Never use a bind mount: SQLite locking on host bind mounts is unreliable on macOS.
@@ -619,8 +621,8 @@ EventDrivenArchitecture/
    │  ├─ EventDrivenDesign.Domain/     # machine catalogue, signal model, simulator, reconciliation maths (pure)
    │  ├─ EventDrivenDesign.Messaging/  # Kafka config builders, CloudEvents headers
    │  ├─ EventDrivenDesign.Persistence/ # SQLite buffer (gateway) and PostgreSQL store and queries
-   │  ├─ EventDrivenDesign.Infrastructure/# ResourceSampler, metrics endpoint helpers
-   │  ├─ EventDrivenDesign.Shared/     # Result, Guard, ExceptionMiddleware
+   │  ├─ EventDrivenDesign.Infrastructure/# global exception handler (ProblemDetails), Result → HTTP, process sampler
+   │  ├─ EventDrivenDesign.Shared/     # Result, Result<T>, Error: no dependencies
    │  ├─ EventDrivenDesign.Gateway/    # host
    │  ├─ EventDrivenDesign.Consumer/    # host
    │  ├─ EventDrivenDesign.Api/        # host

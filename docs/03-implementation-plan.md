@@ -20,6 +20,24 @@
 - Hard rules (§1): data travels only through Kafka; HTTP only for the control room; no code path writes a reading except through the `(machine_id, seq)` key.
 - Wire JSON: camelCase properties, enums as strings, dictionary keys unchanged (signal names stay `snake_case`).
 - Assertions: every test project references `AwesomeAssertions` and asserts in its `.Should()` style (`using AwesomeAssertions;`). The `Assert.*` snippets in this plan state the facts to assert; write them with `.Should()`. Not FluentAssertions 8: its licence needs payment for commercial use.
+- Warnings are errors in every project. `TreatWarningsAsErrors` is set once in `src/backend/Directory.Build.props` and every project inherits it. No project, file or `#pragma` may override it, and no `NoWarn` goes in without a one-line comment saying why. The frontend's `tsc -b` runs with `"strict": true` and fails the build on any error.
+- Clean Architecture dependency rule:
+  - `Shared` (Result, Error) depends on nothing.
+  - `Contracts` depends on nothing.
+  - `Domain` depends only on `Contracts` and `Shared`. It is pure: no I/O, no clock, no framework.
+  - The infrastructure projects (`Persistence`, `Messaging`, `Infrastructure`) may depend on `Domain`, `Contracts` and `Shared`.
+  - The hosts (`Gateway`, `Consumer`, `Api`) compose everything. Nothing references a host.
+  - DDD is applied where it buys something: one ubiquitous language across code, docs and wire, and a pure domain model. There are no repositories or aggregates for ceremony's sake (YAGNI).
+- Result pattern: expected failures return `Result` or `Result<T>` carrying an `Error(string Code, string Message, ErrorKind Kind)` from `EventDrivenDesign.Shared`. Exceptions are for the unexpected only. HTTP endpoints turn a failed `Result` into an RFC 9457 ProblemDetails response through the one shared `ToHttpResult` helper: `Invalid` → 400, `NotFound` → 404, `Unavailable` → 503.
+- Global exception handling: every host calls `AddGlobalExceptionHandling()` and `UseGlobalExceptionHandling()` from `EventDrivenDesign.Infrastructure`.
+  - An unhandled request exception becomes a ProblemDetails 500 with a `traceId` and no stack trace or exception message.
+  - A `JsonException` or `BadHttpRequestException` becomes a 400.
+  - Background loops retry transient I/O (Kafka, PostgreSQL) with `Retry.Backoff`.
+  - A failure that would leave memory ahead of disk, such as a failed buffer write, is fatal: the process exits non-zero and Compose (`restart: on-failure`) restarts it from disk.
+- Patterns by name:
+  - The gateway buffer is a transactional outbox. The reading, its sequence number and the machine state commit in one SQLite transaction, and the sender relays rows and deletes them only after the broker's acknowledgement.
+  - The store writers are idempotent consumers. The unique key and the counters commit in the same database transaction as the insert, and offsets are stored only after that commit.
+  - Idempotency at every hop is listed in doc 02 §4.6, and each row names its test.
 - Tests first: every task with logic starts with a failing test. Commits follow Conventional Commits and end with the `Co-Authored-By` trailer.
 
 ## Review Focus
@@ -32,7 +50,7 @@
 
 ## Deliberately not built (scope cuts)
 
-Not in the must tier, so no task builds them unless a Stretch task says so: the Playwright end-to-end tests and the full-pipeline integration test (§13 cut line); `EventDrivenDesign.Shared` and `EventDrivenDesign.Infrastructure` (nothing uses `Result`, `Guard` or `ExceptionMiddleware`; the process sampler lives in `Messaging`); per-host `.slnx` files; the simulator's wear drift (§5); signal 1 as a percentage of a disk budget (doc 02 §7 row 6).
+Not in the must tier, so no task builds them unless a Stretch task says so: the Playwright end-to-end tests and the full-pipeline integration test (§13 cut line); `Guard` (nothing needs it); per-host `.slnx` files; the simulator's wear drift (§5); signal 1 as a percentage of a disk budget (doc 02 §7 row 6); HTTP `Idempotency-Key` headers (every command is idempotent by design, doc 02 §4.6).
 
 ## Parallel lanes
 
@@ -312,6 +330,51 @@ Values the spec pins:
 - [ ] **Step 5: Run it.** Expected: pass. If Testcontainers fails on Kafka 4.4 (§16 risk 3), switch to a generic `ContainerBuilder` with the §3 broker environment.
 - [ ] **Step 6: Commit.** `git commit -m "feat(gateway): add sender that deletes only acknowledged rows"`
 
+### Task 7b: Shared kernel and host infrastructure (Result pattern, global exception handling)
+
+Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
+
+**Files:**
+- Create: `src/backend/EventDrivenDesign.Shared/EventDrivenDesign.Shared.csproj` (no references), `Result.cs`
+- Create: `src/backend/EventDrivenDesign.Infrastructure/EventDrivenDesign.Infrastructure.csproj` (`<FrameworkReference Include="Microsoft.AspNetCore.App" />`; references Shared and Contracts), `GlobalExceptionHandler.cs`, `HostingExtensions.cs`, `ResultHttpExtensions.cs`
+- Move: `ProcessSampler.cs` from `EventDrivenDesign.Messaging` to `EventDrivenDesign.Infrastructure` (namespace `EventDrivenDesign.Infrastructure`), with its test
+- Test: `src/backend/tests/EventDrivenDesign.Tests/ResultTests.cs`, `GlobalExceptionHandlerTests.cs`
+
+**Interfaces:**
+- Produces:
+  ```csharp
+  public enum ErrorKind { Invalid, NotFound, Unavailable }
+  public sealed record Error(string Code, string Message, ErrorKind Kind = ErrorKind.Invalid);
+  public readonly record struct Result      // IsSuccess, Error? Error; Success(); Failure(Error); implicit from Error
+  public readonly record struct Result<T>   // IsSuccess, Value (throws InvalidOperationException on failure), Error? Error;
+                                            // Success(T); Failure(Error); implicit from T and from Error;
+                                            // TOut Match<TOut>(Func<T, TOut> ok, Func<Error, TOut> fail)
+  public static class HostingExtensions
+  {
+      public static IServiceCollection AddGlobalExceptionHandling(this IServiceCollection services); // AddProblemDetails + AddExceptionHandler<GlobalExceptionHandler>
+      public static WebApplication UseGlobalExceptionHandling(this WebApplication app);              // UseExceptionHandler + UseStatusCodePages
+  }
+  public static class ResultHttpExtensions
+  {
+      public static IResult ToHttpResult(this Result result, int successStatus = StatusCodes.Status202Accepted);
+      public static IResult ToHttpResult<T>(this Result<T> result);                                  // success → 200 with the value
+  }
+  ```
+- A failed result becomes `Results.Problem(statusCode: <kind's status>, title: error.Code, detail: error.Message)`. `GlobalExceptionHandler : IExceptionHandler` logs the exception at Error and writes ProblemDetails through `IProblemDetailsService`:
+  - `JsonException` and `BadHttpRequestException` (including an inner `JsonException`) → 400, title `"Malformed request"`.
+  - Anything else → 500, title `"Unexpected error"`, with `traceId` in the extensions and no exception message or stack.
+
+- [ ] **Step 1: Write the failing tests:**
+  - `Success_has_no_error` and `Failure_carries_its_error`.
+  - `Value_of_a_failure_throws`.
+  - `Match_takes_the_right_branch`.
+  - `Implicit_conversions` (from `Error`, and from `T`).
+  - `Failed_result_maps_to_problem_by_kind`: execute the `IResult` against a `DefaultHttpContext` with a `MemoryStream` body and services from `new ServiceCollection().AddProblemDetails().AddLogging().BuildServiceProvider()`. `Invalid` → 400, `NotFound` → 404, `Unavailable` → 503; the body's `title` is the error code.
+  - `Unhandled_exception_becomes_problem_500_without_leaking`: a minimal `WebApplication` on `http://127.0.0.1:0` with the two extensions and one endpoint that throws `InvalidOperationException("secret detail")`. A real `HttpClient` GET returns 500, content type `application/problem+json`, a `traceId` in the body, and no `"secret detail"` anywhere in it.
+  - `Malformed_json_becomes_400`: same host, a `POST` endpoint bound to `GatewayCommand` posted the body `[]` → 400 `application/problem+json`. This pins Task 1 minor M1 and needs the converter's `ValueKind` guard: a non-object body throws `JsonException`, not `InvalidOperationException`. Make that one-line fix in `GatewayCommand.cs` as part of this task.
+- [ ] **Step 2: Run them and see them fail.** **Step 3: Implement**, add both projects to the `.slnx`, and move `ProcessSampler` (Messaging no longer has it). **Step 4: Run the full unit suite.** Expected: all pass, 0 warnings.
+- [ ] **Step 5: Commit.** `git commit -m "feat(infrastructure): add Result pattern and global exception handling"`
+
 ### Task 8: Gateway host, image and five gateways in Compose
 
 **Files:**
@@ -322,12 +385,28 @@ Values the spec pins:
 **Interfaces:**
 - Consumes: Tasks 4–7.
 - Settings (§5): `Gateway__Shop`, `Gateway__Plant` (`P1`), `Gateway__Seed` (PRS 1000, BDY 2000, PNT 3000, MCH 4000, ASM 5000), `Gateway__FaultsPerMinute` (0.5), `Kafka__BootstrapServers` (`plant-kafka:9092`), `Buffer__Path` (`/data/buffer.db`), `ASPNETCORE_HTTP_PORTS` (8080).
-- Endpoints (§5): `GET /metrics` → `GatewayMetrics`; `POST /control` → `GatewayCommand`, answered by an exhaustive `switch` (§15): `Pause`/`Resume` persist through `SetPausedAsync` and answer 202; `InjectFault` answers 202, or 400 when `Collector.InjectFault` returns false. `GET /healthz` → 200.
+- Endpoints (§5): `GET /metrics` → `GatewayMetrics`; `POST /control` → `GatewayCommand`; `GET /healthz` → 200.
+- `public sealed class GatewayControl(Collector collector, GatewayBuffer buffer) { public Task<Result> ApplyAsync(GatewayCommand command, CancellationToken ct); }`, answered by an exhaustive `switch` (§15). It is test-driven first (ledger Ruling 3):
+  - `Pause` and `Resume` persist through `SetPausedAsync`. They are idempotent: sending one twice succeeds both times and leaves a single persisted state.
+  - `InjectFault` succeeds, with the fault reaching the collector.
+  - An unknown machine fails with `Error("gateway.machine.unknown", …, ErrorKind.NotFound)`.
+  - A kind that doesn't fit the machine type fails with `Error("gateway.fault.not_applicable", …, ErrorKind.Invalid)`.
+  - `/control` returns `(await control.ApplyAsync(cmd, ct)).ToHttpResult()`: 202, 400 or 404 as ProblemDetails.
+- The host calls `AddGlobalExceptionHandling()` / `UseGlobalExceptionHandling()` and uses `ProcessSampler` from Infrastructure (one shared instance, called only from `/metrics`).
+- A failed `WriteTickAsync` is fatal: let it escape `CollectorService`, so the host stops with a non-zero exit code and Compose's `restart: on-failure` restarts the gateway from its persisted state. Never keep ticking with in-memory sequence numbers that disk does not have. Sender failures stay inside the sender's retry loop.
 - `CollectorService`: `PeriodicTimer(TimeSpan.FromSeconds(1), TimeProvider.System)`; skip while paused; random faults at `FaultsPerMinute` (per tick, the probability is `FaultsPerMinute / 60`, applied to a random machine with a random applicable kind); `WriteTickAsync(collector.Tick(now))`.
 - Dockerfile (context `src/`): a `build` stage on `sdk:11.0` restores `backend/EventDrivenDesign.slnx` and publishes each host to `/out/<host>`. Each host has a target on `aspnet:11.0` with `ENV DOTNET_gcServer=0`, the entrypoint `dotnet EventDrivenDesign.<Host>.dll`, and the target name `gateway`. Later tasks add `consumer`, `api` and `dashboard`.
 - `create-topics.sh`: `kafka-topics.sh --create --if-not-exists` for `machine.readings` (12 partitions) and `machine.alarms` (3), replication factor 1, `retention.ms=10800000`.
-- Compose: the five gateways come from one YAML anchor (`x-gateway: &gateway`), overriding the shop, the seed and the volume `gateway-<shop>-data:/data`. They depend on `plant-topics` completing successfully. Limit 256 MB each.
+- Compose: the five gateways come from one YAML anchor (`x-gateway: &gateway`), overriding the shop, the seed and the volume `gateway-<shop>-data:/data`. They depend on `plant-topics` completing successfully. Limit 256 MB each. `restart: on-failure`.
 
+- [ ] **Step 0: Test-drive `GatewayControl`** in `src/backend/tests/EventDrivenDesign.Tests/GatewayControlTests.cs`. Use a real collector and a temp-file buffer. The cases:
+  - `Inject_valid_fault_succeeds_and_reaches_the_collector`: the next tick carries one alarm row.
+  - `Unknown_machine_is_not_found`.
+  - `Inapplicable_fault_is_invalid`.
+  - `Pause_twice_is_idempotent`: both calls succeed, and `LoadPaused()` is true.
+  - `Resume_after_pause_unpauses`.
+
+  RED, then GREEN.
 - [ ] **Step 1: Write `Program.cs` and `CollectorService.cs`; build.** From `src/backend/`: `dotnet build EventDrivenDesign.slnx`. Expected: 0 errors.
 - [ ] **Step 2: Write the Dockerfile, the topics script and the Compose services.**
 - [ ] **Step 3: Verify the flow.** From `src/deployment/`: `docker compose up -d --build --wait`. Then run `docker compose exec plant-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic machine.readings` twice, 10 s apart. Expected: the summed offsets grow by about 5,000 (±10%).
@@ -399,7 +478,7 @@ Values the spec pins:
   4. Apply the cap delay.
   5. The partitions-revoked handler calls `Commit()`.
 - Settings: `Consumer__Id`, `Consumer__MaxRowsPerSecond`, `Kafka__BootstrapServers` (`central-kafka:9092`), `ConnectionStrings__Central` (`Host=central-db;Username=edd;Password=edd;Database=edd`).
-- `GET /metrics` → `ConsumerMetrics`; `GET /healthz`.
+- `GET /metrics` → `ConsumerMetrics`; `GET /healthz`. The host calls `AddGlobalExceptionHandling()` / `UseGlobalExceptionHandling()` and uses `ProcessSampler` from Infrastructure. Compose: `restart: on-failure`.
 
 - [ ] **Step 1: Write the failing tests:** `RateCap(1000).DelayAfter(5000, 1 s)` = 4 s; `RateCap(1000).DelayAfter(500, 1 s)` = 0; `RateCap(0).DelayAfter(1_000_000, 0)` = 0.
 - [ ] **Step 2: Run them and see them fail.**
@@ -506,7 +585,7 @@ Values the spec pins:
   - `GET /api/chart?minutes=10`: a point is provisional after the watermark.
   - `GET /api/alarms`: central alarms, the last 50.
   - `POST /api/plant/pause` and `POST /api/plant/resume`: fan out to the five gateways.
-  - `POST /api/machines/{machineId}/faults` with body `{ "kind": "Overheat" }`: routed to `gateway-<shop>` by the id's second segment; a 400 from the gateway is passed through.
+  - `POST /api/machines/{machineId}/faults` with body `{ "kind": "Overheat" }`: routed to `gateway-<shop>` by the id's second segment. A `public static Result<string> GatewayFor(string machineId)` (unit-tested) returns `Error("api.machine.bad_id", …, Invalid)` for an id without a known shop segment. An unreachable gateway → `Error("api.gateway.unavailable", …, Unavailable)` (503). A 400 or 404 ProblemDetails from the gateway is passed through. The host calls `AddGlobalExceptionHandling()` / `UseGlobalExceptionHandling()`.
   - `GET /healthz`
 - Settings: `Api__Gateways` (`gateway-prs:8080,…`), `Api__Consumers` (`consumer-1:8080,consumer-2:8080`), `Kafka__Plant` (`plant-kafka:9092`), `Kafka__Central` (`central-kafka:9092`), `ConnectionStrings__Central`.
 
