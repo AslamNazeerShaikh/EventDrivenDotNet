@@ -13,6 +13,7 @@ var shop = config["Gateway:Shop"]
 var plant = config["Gateway:Plant"] ?? "P1";
 var seed = config.GetValue<int>("Gateway:Seed");
 var faultsPerMinute = config.GetValue("Gateway:FaultsPerMinute", 0.5);
+var historyDepthSeconds = config.GetValue("Gateway:HistoryDepthSeconds", 600);
 var bootstrap = config["Kafka:BootstrapServers"] ?? "plant-kafka:9092";
 var bufferPath = config["Buffer:Path"] ?? "/data/buffer.db";
 
@@ -46,6 +47,7 @@ builder.Services.AddHostedService(sp => new CollectorService(
     sp.GetRequiredService<GatewayBuffer>(),
     MachineCatalog.ForShop(plant, shop),
     faultsPerMinute,
+    historyDepthSeconds,
     TimeProvider.System
 ));
 
