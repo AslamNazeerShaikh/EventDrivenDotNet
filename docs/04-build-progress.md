@@ -34,7 +34,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 4 | SQLite outbox buffer | Done | `e27e9c3`, `1fb8dea` | Clean after 1 fix round |
 | 6 | Kafka settings, CloudEvents, backoff | Done | `7102f51` | Clean |
 | 5 | Collector (+ simulator re-inject fix) | Done | `de16055`, `f0fe090` | Clean |
-| 7 | Sender, with a Kafka Testcontainers test | **Built; review running** | `272ae74` | Pending; review range `0733e03..272ae74` |
+| 7 | Sender, with a Kafka Testcontainers test | **Fix round 1 running** | `272ae74` | Needs fixes: test race; failure-path tests missing |
 | 7b | Shared (Result) + Infrastructure (global exception handling) | Next | — | — |
 | 8 | Gateway host, image, 5 gateways | To do | — | — |
 | 9 | Central store (PostgreSQL) | To do | — | — |
