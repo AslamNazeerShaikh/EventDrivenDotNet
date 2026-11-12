@@ -34,8 +34,9 @@ if [[ -z "$RANGE" ]]; then
   fi
 fi
 
-# Only added lines can leak something new.
-added=$(git diff "$RANGE" | grep -E '^\+' | grep -v -E '^\+\+\+ ' || true)
+# Only added lines can leak something new. This file is excluded because it
+# necessarily contains the patterns it searches for.
+added=$(git diff "$RANGE" -- . ':(exclude)src/scripts/git/scan-private.sh' | grep -E '^\+' | grep -v -E '^\+\+\+ ' || true)
 
 patterns='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|net|org|io|in|co|dev)'
 patterns+='|\+91[ -]?[0-9]{5}'
