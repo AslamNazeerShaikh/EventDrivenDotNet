@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="03-reading-end-to-end-title 03-reading-end-to-end-desc" id="d-03-reading-end-to-end-root">
+        <title id="03-reading-end-to-end-title">One reading, end to end: when is it safe?</title>
+        <desc id="03-reading-end-to-end-desc">Sequence of commits and acknowledgements carrying one reading from the machine through the edge gateway, plant Kafka, MirrorMaker 2, central Kafka and the store writer into the central database, marking the four points where the reading is durable and safe.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #d-03-reading-end-to-end-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #d-03-reading-end-to-end-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #d-03-reading-end-to-end-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#d-03-reading-end-to-end-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="d-03-reading-end-to-end-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="d-03-reading-end-to-end-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="d-03-reading-end-to-end-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ============================================================
+             LIFELINES — dashed verticals behind everything.
+             Centers: 136, 304, 472, 640, 808, 976, 1144
+             ============================================================ -->
+        <line x1="136" y1="104" x2="136" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="304" y1="104" x2="304" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="472" y1="104" x2="472" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="640" y1="104" x2="640" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="808" y1="104" x2="808" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="976" y1="104" x2="976" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+        <line x1="1144" y1="104" x2="1144" y2="592" stroke="#2d3142" stroke-width="1" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+
+        <!-- ============================================================
+             MESSAGES — time flows top to bottom. Drawn before boxes.
+             ============================================================ -->
+        <!-- 1 · Machine → Edge gateway -->
+        <line x1="136" y1="132" x2="304" y2="132" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 2 · Edge gateway self: commit + fsync — SAFE 1 (focal) -->
+        <path d="M 308 156 H 348 V 180 H 308" fill="none" stroke="#bf4520" stroke-width="1.4" marker-end="url(#d-03-reading-end-to-end-arrow-accent)"/>
+        <!-- 3 · Edge gateway → Plant Kafka -->
+        <line x1="304" y1="208" x2="472" y2="208" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 4 · Plant Kafka → Edge gateway (dashed return) -->
+        <line x1="472" y1="240" x2="304" y2="240" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 4b · Edge gateway self: delete row -->
+        <path d="M 308 264 H 348 V 288 H 308" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 5a · MirrorMaker 2 → Plant Kafka: fetch -->
+        <line x1="640" y1="316" x2="472" y2="316" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 5b · Plant Kafka → MirrorMaker 2: records (dashed return) -->
+        <line x1="472" y1="344" x2="640" y2="344" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 6a · MirrorMaker 2 → Central Kafka -->
+        <line x1="640" y1="372" x2="808" y2="372" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 6b · Central Kafka → MirrorMaker 2 (dashed return) -->
+        <line x1="808" y1="400" x2="640" y2="400" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 6c · MirrorMaker 2 self: save source offset -->
+        <path d="M 644 424 H 684 V 448 H 644" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 7a · Store writer → Central Kafka: poll batch -->
+        <line x1="976" y1="472" x2="808" y2="472" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 7b · Central Kafka → Store writer: records (dashed return) -->
+        <line x1="808" y1="498" x2="976" y2="498" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 8a · Store writer → Central DB: insert -->
+        <line x1="976" y1="524" x2="1144" y2="524" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <!-- 8b · Central DB → Store writer: commit — SAFE 4 (focal) -->
+        <line x1="1144" y1="550" x2="976" y2="550" stroke="#bf4520" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow-accent)"/>
+        <!-- 9 · Store writer → Central Kafka: commit offset -->
+        <line x1="976" y1="576" x2="808" y2="576" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+
+        <!-- ============================================================
+             MESSAGE LABELS — opaque masks, 6–10px clear of the stroke.
+             ============================================================ -->
+        <!-- M1 -->
+        <rect x="180" y="112" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="220" y="121" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READING SEQ N</text>
+
+        <!-- M2 (right of the self loop): action + SAFE 1 focal + detail -->
+        <rect x="356" y="128" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="404" y="137" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMMIT+FSYNC</text>
+        <rect x="356" y="144" width="48" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="380" y="153" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SAFE 1</text>
+        <rect x="356" y="160" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="404" y="169" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ON DISK AT EDGE</text>
+
+        <!-- M3 -->
+        <rect x="336" y="188" width="104" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="388" y="197" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PRODUCE ACKS=ALL</text>
+
+        <!-- M4 -->
+        <rect x="330" y="222" width="116" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="388" y="231" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ACK · 2/3 · SAFE 2</text>
+
+        <!-- M4b (right of the self loop) -->
+        <rect x="356" y="268" width="72" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="392" y="277" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DELETE ROW</text>
+
+        <!-- M5a -->
+        <rect x="532" y="296" width="48" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="556" y="305" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FETCH</text>
+
+        <!-- M5b -->
+        <rect x="528" y="324" width="56" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="556" y="333" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RECORDS</text>
+
+        <!-- M6a -->
+        <rect x="672" y="352" width="104" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="724" y="361" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PRODUCE ACKS=ALL</text>
+
+        <!-- M6b -->
+        <rect x="680" y="380" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="724" y="389" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ACK · SAFE 3</text>
+
+        <!-- M6c (right of the self loop) -->
+        <rect x="696" y="431" width="108" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="440" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SAVE SOURCE OFFSET</text>
+
+        <!-- M7a -->
+        <rect x="852" y="452" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="892" y="461" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">POLL BATCH</text>
+
+        <!-- M7b -->
+        <rect x="864" y="478" width="56" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="892" y="487" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RECORDS</text>
+
+        <!-- M8a -->
+        <rect x="1002" y="504" width="116" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1060" y="513" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">INSERT ON CONFLICT</text>
+
+        <!-- M8b (focal) -->
+        <rect x="1000" y="530" width="120" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1060" y="539" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMMIT · SAFE 4 · ONCE</text>
+
+        <!-- M9 -->
+        <rect x="848" y="556" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="892" y="565" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMMIT OFFSET</text>
+
+        <!-- ============================================================
+             ACTOR BOXES — drawn after arrows and labels.
+             Box y=48, h=56; name y=80; sublabel y=95.
+             ============================================================ -->
+        <!-- Actor 1: Machine (input) -->
+        <rect x="64" y="48" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="48" width="144" height="56" rx="6" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+        <rect x="72" y="56" width="28" height="12" rx="2" fill="none" stroke="#5a6580" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="86" y="65" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SRC</text>
+        <text x="136" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Machine</text>
+        <text x="136" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">1 READING / S</text>
+
+        <!-- Actor 2: Edge gateway (backend) -->
+        <rect x="232" y="48" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="240" y="56" width="32" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="256" y="65" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+        <text x="304" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Edge gateway</text>
+        <text x="304" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">SQLITE BUFFER · FSYNC</text>
+
+        <!-- Actor 3: Plant Kafka (store) -->
+        <rect x="400" y="48" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="400" y="48" width="144" height="56" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <rect x="408" y="56" width="36" height="12" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="426" y="65" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">KAFKA</text>
+        <text x="472" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Plant Kafka</text>
+        <text x="472" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">RF 3 · MIN ISR 2</text>
+
+        <!-- Actor 4: MirrorMaker 2 (backend) -->
+        <rect x="568" y="48" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="576" y="56" width="40" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="596" y="65" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MIRROR</text>
+        <text x="640" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MirrorMaker 2</text>
+        <text x="640" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">PULLS PLANT TOPICS</text>
+
+        <!-- Actor 5: Central Kafka (store) -->
+        <rect x="736" y="48" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="736" y="48" width="144" height="56" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <rect x="744" y="56" width="36" height="12" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="762" y="65" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">KAFKA</text>
+        <text x="808" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Central Kafka</text>
+        <text x="808" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">PLANT1.* · 3 DAYS</text>
+
+        <!-- Actor 6: Store writer (backend) -->
+        <rect x="904" y="48" width="144" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="912" y="56" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="926" y="65" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SVC</text>
+        <text x="976" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Store writer</text>
+        <text x="976" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">CONSUMER GROUP</text>
+
+        <!-- Actor 7: Central DB (store) -->
+        <rect x="1072" y="48" width="144" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="1072" y="48" width="144" height="56" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <rect x="1080" y="56" width="24" height="12" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="1092" y="65" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="1144" y="80" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Central DB</text>
+        <text x="1144" y="95" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">MACHINE_ID + SEQ KEY</text>
+
+        <!-- Callout -->
+        <text x="640" y="616" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="middle">A crash between any two steps causes a resend, never a loss. The database key drops the resend.</text>
+
+        <!-- ============================================================
+             LEGEND — horizontal strip at the bottom.
+             ============================================================ -->
+        <line x1="40" y1="640" x2="1240" y2="640" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="40" y="658" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <line x1="40" y1="677" x2="68" y2="677" stroke="#bf4520" stroke-width="1.4" marker-end="url(#d-03-reading-end-to-end-arrow-accent)"/>
+        <text x="76" y="680" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal safe point</text>
+
+        <line x1="220" y1="677" x2="248" y2="677" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <text x="256" y="680" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Call</text>
+
+        <line x1="320" y1="677" x2="348" y2="677" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <text x="356" y="680" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Return / ack</text>
+
+        <path d="M 480 668 H 500 V 680 H 480" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#d-03-reading-end-to-end-arrow)"/>
+        <text x="508" y="680" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Self step</text>
+      </svg>
