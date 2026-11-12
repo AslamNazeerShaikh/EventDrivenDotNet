@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 10b done; Task 14 (dashboard) in progress. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 14 (dashboard) built and under review. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -43,12 +43,12 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
 | 13 | Control-room API | Done (live: proof WAIT → PASS with 0/0/0; overview answers with central down; ETA "—" during outage) | `d067b02`, `58ef5ac` | Clean after 1 fix round |
 | 10b | Fix: central alarms never stored (found live in Task 13). Root cause: .NET dedupes `AddHostedService` by type, so the alarms loop was dropped | Done (live: 62 alarms stored, `central-alarms` group exists) | `3678d05` | Clean |
-| 14 | Dashboard (+ the alarm-latency clamp as its own commit) | **In progress** | — | — |
+| 14 | Dashboard (+ the alarm-latency clamp as its own commit) | **Built; review running** (live: green tiles, 500/s, outage hole visible, pause → PASS) | `225c837`, `626ed6d` | Pending; range `c5e9ff1..626ed6d` |
 | 15 | `drill.sh` | To do | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 143 unit and 12 integration tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
+Tests on the branch: 143 unit, 13 integration and 23 frontend (`bun test`) tests passing, 0 warnings (after Task 13). One flaky candidate is logged for the final review (a sender unit test with a 31 s fake-clock advance).
 
 ## 4. Rulings so far
 
@@ -87,7 +87,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 ### Must fix before the demo
 
-- Alarm latency shows slightly negative (-0.2 to -0.9 s): device time = tick + machine index × 10 ms can run ahead of `stored_at`. Clamp latency at 0 in the API's alarm view, or spread the offsets into the past.
+- ~~Alarm latency shows slightly negative~~: fixed in `225c837` (clamped at 0, with a test).
 
 ## 6. Fallbacks (plan B for every risk)
 
@@ -106,7 +106,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 14 (dashboard) is being built from `task-14-brief.md`. It starts with a separate commit `fix(api): clamp alarm latency at zero` (Ruling 18). If the result is lost, check `git log` for `feat(frontend): add control-room dashboard`. If it exists, review it against the brief; otherwise re-dispatch. Then Task 15 (`drill.sh`).
+3. **Right now:** Task 14's review is running (range `c5e9ff1..626ed6d`). If the result is lost, re-review that range against `task-14-brief.md` and ledger Rulings 4 and 18. Then Task 15 (`drill.sh`, `task-15-brief.md`).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
