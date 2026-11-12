@@ -21,29 +21,7 @@ builder.Services.AddSingleton(sp => new CentralStore(sp.GetRequiredService<Npgsq
 builder.Services.AddSingleton(_ => new ConsumerStats(TimeProvider.System));
 builder.Services.AddSingleton<ProcessSampler>();
 
-IConsumer<string, byte[]> Build(string group, ILogger log) =>
-    new ConsumerBuilder<string, byte[]>(KafkaConfigs.StoreWriter(bootstrap, group))
-        .SetPartitionsRevokedHandler((c, _) => BatchLoop<object>.CommitOnRevoke(c, log))
-        .Build();
-
-builder.Services.AddSingleton(sp =>
-{
-    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("readings");
-    var store = sp.GetRequiredService<CentralStore>();
-    return new BatchLoop<MachineReading>(Build("central-readings", log), TopicNames.CentralReadingsPattern, 5000, TimeSpan.FromMilliseconds(200),
-        new RateCap(maxRowsPerSecond), (batch, rejected, ct) => store.InsertReadingsAsync(batch, rejected, consumerId, ct),
-        sp.GetRequiredService<ConsumerStats>(), log);
-});
-builder.Services.AddHostedService(sp => new LoopService(sp.GetRequiredService<BatchLoop<MachineReading>>().Run));
-
-builder.Services.AddSingleton(sp =>
-{
-    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("alarms");
-    var store = sp.GetRequiredService<CentralStore>();
-    return new BatchLoop<MachineAlarm>(Build("central-alarms", log), TopicNames.CentralAlarmsPattern, 100, TimeSpan.FromMilliseconds(50), null,
-        (batch, rejected, ct) => store.InsertAlarmsAsync(batch, rejected, consumerId, ct), sp.GetRequiredService<ConsumerStats>(), log);
-});
-builder.Services.AddHostedService(sp => new LoopService(sp.GetRequiredService<BatchLoop<MachineAlarm>>().Run));
+builder.Services.AddStoreWriterLoops(bootstrap, consumerId, maxRowsPerSecond);
 
 var app = builder.Build();
 app.UseGlobalExceptionHandling();
