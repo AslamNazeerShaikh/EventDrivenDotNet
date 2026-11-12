@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 12 November 2026, Task 7b done; Task 8 in progress.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 12 November 2026, Task 8 done; Task 9 in progress.
 
 ## 1. Where things are
 
@@ -36,8 +36,8 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 5 | Collector (+ simulator re-inject fix) | Done | `de16055`, `f0fe090` | Clean |
 | 7 | Sender, with a Kafka Testcontainers test | Done | `272ae74`, `ba00a3b` | Clean after 1 fix round |
 | 7b | Shared (Result) + Infrastructure (global exception handling) | Done | `5a2ef94`, `5d4b4dc` | Clean after 1 fix round |
-| 8 | Gateway host, image, 5 gateways | **In progress** | — | — |
-| 9 | Central store (PostgreSQL) | To do | — | — |
+| 8 | Gateway host, image, 5 gateways | Done (live: ~500 readings/s, seqs continue across kill) | `ea3908d` | Clean |
+| 9 | Central store (PostgreSQL) | **In progress** | — | — |
 | 10 | Consumer host, drain cap | To do | — | — |
 | 11 | MirrorMaker 2, end-to-end check | To do | — | — |
 | 12 | Proof, ETA, watermark maths | To do | — | — |
@@ -47,7 +47,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 16 | Cold-start rehearsal, README | To do | — | — |
 | R1–R4 | Resilience tier (section 5) | Designed; **not yet written into docs 00/02/03** | — | — |
 
-Tests on the branch: 69 unit and 1 integration test passing, 0 warnings (after Task 7b).
+Tests on the branch: 77 unit and 1 integration test passing, 0 warnings (after Task 8).
 
 ## 4. Rulings so far
 
@@ -101,7 +101,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 8 is being built from `task-8-brief.md`. If the result is lost, check `git log` for `feat(gateway): add gateway host, image and five shop gateways`. If it exists, review it against the brief; otherwise re-dispatch the brief. Then Task 9.
+3. **Right now:** Task 9 is being built from `task-9-brief.md`. If the result is lost, check `git log` for `feat(persistence): add central store with one unique-key insert`. If it exists, review it against the brief; otherwise re-dispatch the brief. Then Task 10.
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
