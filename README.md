@@ -17,7 +17,8 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 ### Prerequisites
 
 1. Docker Desktop with its memory set to 10 GB (the containers' limits add up to about 5.1 GB).
-2. Nothing else to run the demo. The .NET SDK 11.0.100 and Bun 1.4.4 are needed only to develop or run the tests.
+2. `bash`, `curl` and `python3` for the drill and proof scripts.
+3. The .NET SDK 11.0.100 and Bun 1.4.4 only to develop or run the tests.
 
 ### Start
 
@@ -43,7 +44,9 @@ Run these from `src/deployment/` (the script works from anywhere). Each one prin
 | 4 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
 | 5 | `scripts/drill.sh pause` / `resume` | Stops or restarts all simulated machines |
 
-To show the alarm lane, inject an alarm during the drain: `src/scripts/live/api.sh fault P1-MCH-C017 Vibration`. It reaches central within seconds.
+To show the alarm lane, inject an alarm during the drain: `../scripts/live/api.sh fault P1-MCH-C017 Vibration`. It reaches central within seconds.
+
+After `central-up`, the store writers resume in about 45 s and the backlog drains in about as long as the outage lasted.
 
 ### The proof
 
