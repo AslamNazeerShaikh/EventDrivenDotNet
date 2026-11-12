@@ -25,3 +25,9 @@ Follow [Conventional Commits v1.0.0](https://www.conventionalcommits.org/en/v1.0
 - Description is imperative, lowercase, no trailing period — a short summary of the change.
 - Body explains what and why; footers use trailer format, e.g. `Refs: #42`.
 - One logical change per commit; case-insensitive except `BREAKING CHANGE`.
+
+## Handover
+
+- Before any work on this repo, read [docs/04-build-progress.md](docs/04-build-progress.md). Its section 7 step 3 ("Right now") says exactly where to resume, and section 4 lists the rulings.
+- Then read the local ledger `.superpowers/sdd/03-implementation-plan/progress.md` (git-ignored). Trust it and `git log` over memory.
+- Use the scripts in [src/scripts/](src/scripts/README.md) instead of retyping commands. Commit and push every step with `src/scripts/git/commit-push.sh`, on `feat/plant-demo` only.
