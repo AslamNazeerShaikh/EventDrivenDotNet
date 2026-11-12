@@ -81,8 +81,8 @@ public sealed class CentralStoreTests : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
         var alarm = new MachineAlarm("m1", 1, 5, T0, AlarmKind.Overheat, "critical", "temp_c", 99.0, 90.0);
-        (await _store.InsertAlarmsAsync([alarm], "w1", ct)).Should().Be(1);
-        (await _store.InsertAlarmsAsync([alarm, alarm], "w1", ct)).Should().Be(0);
+        (await _store.InsertAlarmsAsync([alarm], [], "w1", ct)).Should().Be(1);
+        (await _store.InsertAlarmsAsync([alarm, alarm], [], "w1", ct)).Should().Be(0);
 
         (await Scalar<long>("SELECT count(*) FROM alarms")).Should().Be(1);
         (await Scalar<string>("SELECT kind FROM alarms")).Should().Be("Overheat");
@@ -99,5 +99,32 @@ public sealed class CentralStoreTests : IAsyncLifetime
 
         (await Scalar<long>("SELECT count(*) FROM rejected_records")).Should().Be(1);
         (await Scalar<byte[]>("SELECT raw FROM rejected_records")).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public async Task Rejected_alarms_are_quarantined_once()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var alarm = new MachineAlarm("m1", 1, 5, T0, AlarmKind.Overheat, "critical", "temp_c", 99.0, 90.0);
+        RejectedRecord[] bad = [new("plant1.machine.alarms", 3, 17, [9, 8, 7], "bad json")];
+        (await _store.InsertAlarmsAsync([alarm], bad, "w1", ct)).Should().Be(1);
+        (await _store.InsertAlarmsAsync([alarm], bad, "w1", ct)).Should().Be(0);
+
+        (await Scalar<long>("SELECT count(*) FROM alarms")).Should().Be(1);
+        (await Scalar<long>("SELECT count(*) FROM rejected_records WHERE topic='plant1.machine.alarms' AND kafka_partition=3 AND kafka_offset=17")).Should().Be(1);
+        (await Scalar<byte[]>("SELECT raw FROM rejected_records")).Should().Equal(9, 8, 7);
+        (await Scalar<long>("SELECT received FROM ingest_totals WHERE stream='alarms' AND writer_id='w1'")).Should().Be(2);
+        (await Scalar<long>("SELECT inserted FROM ingest_totals WHERE stream='alarms' AND writer_id='w1'")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_rejected_only_alarm_call_still_quarantines_and_adds_zero_counters()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        RejectedRecord[] bad = [new("plant1.machine.alarms", 0, 1, [1], "bad json")];
+        (await _store.InsertAlarmsAsync([], bad, "w1", ct)).Should().Be(0);
+
+        (await Scalar<long>("SELECT count(*) FROM rejected_records")).Should().Be(1);
+        (await Scalar<long>("SELECT received FROM ingest_totals WHERE stream='alarms' AND writer_id='w1'")).Should().Be(0);
     }
 }

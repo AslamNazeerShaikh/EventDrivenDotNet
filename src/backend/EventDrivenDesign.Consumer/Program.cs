@@ -40,9 +40,8 @@ builder.Services.AddSingleton(sp =>
 {
     var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("alarms");
     var store = sp.GetRequiredService<CentralStore>();
-    // InsertAlarmsAsync has no rejected-record table: an unparsable alarm is logged, counted in Rejected and then dropped.
     return new BatchLoop<MachineAlarm>(Build("central-alarms", log), TopicNames.CentralAlarmsPattern, 100, TimeSpan.FromMilliseconds(50), null,
-        (batch, _, ct) => store.InsertAlarmsAsync(batch, consumerId, ct), sp.GetRequiredService<ConsumerStats>(), log);
+        (batch, rejected, ct) => store.InsertAlarmsAsync(batch, rejected, consumerId, ct), sp.GetRequiredService<ConsumerStats>(), log);
 });
 builder.Services.AddHostedService(sp => new LoopService(sp.GetRequiredService<BatchLoop<MachineAlarm>>().Run));
 

@@ -82,30 +82,23 @@ public sealed class CentralStore(NpgsqlDataSource db)
             inserted = (int)(long)(await cmd.ExecuteScalarAsync(ct))!;
         }
         await AddTotalsAsync(conn, tx, "readings", writerId, batch.Count, inserted, ct);
-        foreach (var r in rejected)
-        {
-            await using var cmd = new NpgsqlCommand(InsertRejected, conn, tx);
-            cmd.Parameters.AddWithValue("topic", r.Topic);
-            cmd.Parameters.AddWithValue("partition", r.Partition);
-            cmd.Parameters.AddWithValue("offset", r.Offset);
-            cmd.Parameters.AddWithValue("raw", r.Raw);
-            cmd.Parameters.AddWithValue("error", r.Error);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
+        await QuarantineAsync(conn, tx, rejected, ct);
         await tx.CommitAsync(ct);
         return inserted;
     }
 
-    /// <summary>Returns alarms inserted. An empty batch is a no-op.</summary>
-    public async Task<int> InsertAlarmsAsync(IReadOnlyList<MachineAlarm> batch, string writerId, CancellationToken ct)
+    /// <summary>Returns alarms inserted. An empty batch with nothing rejected is a no-op (counters stay untouched).</summary>
+    public async Task<int> InsertAlarmsAsync(
+        IReadOnlyList<MachineAlarm> batch, IReadOnlyList<RejectedRecord> rejected, string writerId, CancellationToken ct)
     {
-        if (batch.Count == 0) return 0;
+        if (batch.Count == 0 && rejected.Count == 0) return 0;
 
         await using var conn = await db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        int inserted;
-        await using (var cmd = new NpgsqlCommand(InsertAlarms, conn, tx))
+        var inserted = 0;
+        if (batch.Count > 0)
         {
+            await using var cmd = new NpgsqlCommand(InsertAlarms, conn, tx);
             cmd.Parameters.Add(new NpgsqlParameter<string[]>("machine_ids", [.. batch.Select(a => a.MachineId)]) { NpgsqlDbType = (NpgsqlDbType)TextArray });
             cmd.Parameters.Add(new NpgsqlParameter<long[]>("alarm_seqs", [.. batch.Select(a => a.AlarmSeq)]) { NpgsqlDbType = (NpgsqlDbType)BigintArray });
             cmd.Parameters.Add(new NpgsqlParameter<long[]>("reading_seqs", [.. batch.Select(a => a.ReadingSeq)]) { NpgsqlDbType = (NpgsqlDbType)BigintArray });
@@ -118,8 +111,24 @@ public sealed class CentralStore(NpgsqlDataSource db)
             inserted = (int)(long)(await cmd.ExecuteScalarAsync(ct))!;
         }
         await AddTotalsAsync(conn, tx, "alarms", writerId, batch.Count, inserted, ct);
+        await QuarantineAsync(conn, tx, rejected, ct);
         await tx.CommitAsync(ct);
         return inserted;
+    }
+
+    private static async Task QuarantineAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, IReadOnlyList<RejectedRecord> rejected, CancellationToken ct)
+    {
+        foreach (var r in rejected)
+        {
+            await using var cmd = new NpgsqlCommand(InsertRejected, conn, tx);
+            cmd.Parameters.AddWithValue("topic", r.Topic);
+            cmd.Parameters.AddWithValue("partition", r.Partition);
+            cmd.Parameters.AddWithValue("offset", r.Offset);
+            cmd.Parameters.AddWithValue("raw", r.Raw);
+            cmd.Parameters.AddWithValue("error", r.Error);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 
     private static async Task AddTotalsAsync(
