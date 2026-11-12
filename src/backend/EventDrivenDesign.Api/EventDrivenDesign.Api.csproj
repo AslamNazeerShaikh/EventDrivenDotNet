@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Infrastructure\EventDrivenDesign.Infrastructure.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Messaging\EventDrivenDesign.Messaging.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Persistence\EventDrivenDesign.Persistence.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Shared\EventDrivenDesign.Shared.csproj" />
+  </ItemGroup>
+</Project>

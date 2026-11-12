@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\EventDrivenDesign.Api\EventDrivenDesign.Api.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Consumer\EventDrivenDesign.Consumer.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
     <ProjectReference Include="..\..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />

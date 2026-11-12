@@ -199,6 +199,30 @@ services:
       <<: *consumer-env
       Consumer__Id: consumer-2
 
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: api
+    environment:
+      Api__Gateways: gateway-prs:8080,gateway-bdy:8080,gateway-pnt:8080,gateway-mch:8080,gateway-asm:8080
+      Api__Consumers: consumer-1:8080,consumer-2:8080
+      Kafka__Plant: plant-kafka:9092
+      Kafka__Central: central-kafka:9092
+      ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
+      ASPNETCORE_HTTP_PORTS: "8080"
+    depends_on:
+      plant-kafka:
+        condition: service_healthy
+      central-kafka:
+        condition: service_healthy
+      central-db:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: on-failure
+    networks: [plant, central, ops]
+
 networks:
   plant:
   central:

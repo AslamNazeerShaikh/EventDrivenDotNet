@@ -7,6 +7,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Npgsql" />
   </ItemGroup>
