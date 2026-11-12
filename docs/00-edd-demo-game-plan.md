@@ -89,6 +89,7 @@ Versions were checked on 12 November 2026. Pin them exactly.
 | 6 | `Testcontainers.Kafka`, `Testcontainers.PostgreSql` | 4.16.0 | Use `new KafkaBuilder("apache/kafka:4.4.0")`. Testcontainers' own CI only tests Kafka 4.1.1 |
 | 7 | `Microsoft.Extensions.TimeProvider.Testing` | 11.0.0 | `FakeTimeProvider` for the simulator tests |
 | 8 | `Microsoft.Playwright` | 1.64.1 | End-to-end tests; runs on the host |
+| 8b | CSharpier | 1.4.0 | C# formatter: a local .NET tool pinned in `src/backend/dotnet-tools.json` (roll-forward on, so it runs on .NET 11). The versioned git hooks run it on every commit and block unformatted pushes |
 | 8a | `AwesomeAssertions` | 9.6.0 | Test assertions in the `.Should()` style. The Apache-2.0 fork of FluentAssertions, chosen because FluentAssertions 8 needs a paid licence for commercial use |
 | 9 | Bun | 1.4.4 | Frontend package manager and script runner; run Vite with `bunx --bun vite` |
 | 10 | React | 19.3.1 | |

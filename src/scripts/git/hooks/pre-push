@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# pre-push: refuse to push unformatted C# code.
+#
+# Installed by src/scripts/git/install-hooks.sh (git config core.hooksPath).
+# Runs CSharpier in check mode over the whole src/backend/ tree. The
+# pre-commit hook normally keeps everything formatted; this is the safety net
+# for commits made with --no-verify or before the hooks were installed.
+# To fix: src/scripts/build/format.sh, commit the result, push again.
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel)
+exec "$ROOT/src/scripts/build/format.sh" --check

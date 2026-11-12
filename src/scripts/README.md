@@ -18,6 +18,12 @@ The demo's own runtime script, `drill.sh`, is not here. It lives with the runtim
 | 8 | [`git/scan-private.sh`](git/scan-private.sh) | Scans outgoing commits for e-mail addresses, phone numbers and keys before a push (the repo is public) | `src/scripts/git/scan-private.sh` |
 | 9 | [`git/commit-push.sh`](git/commit-push.sh) | Commits the given paths with the project trailer, runs the scan, and pushes the current branch | `src/scripts/git/commit-push.sh "docs: update build progress"` |
 | 10 | [`sdd/sdd.sh`](sdd/sdd.sh) | Shortcuts for the task-by-task build of doc 03: extract a task brief, write a review package, append to the ledger | `src/scripts/sdd/sdd.sh brief 16` |
+| 11 | [`build/format.sh`](build/format.sh) | Formats the C# codebase with CSharpier 1.4.0 (a local tool pinned in `src/backend/dotnet-tools.json`); `--check` only reports | `src/scripts/build/format.sh --check` |
+| 12 | [`git/install-hooks.sh`](git/install-hooks.sh) | Activates the versioned git hooks below (`core.hooksPath`); run it once per clone | `src/scripts/git/install-hooks.sh` |
+| 13 | [`git/hooks/pre-commit`](git/hooks/pre-commit) | Formats the staged `.cs` files with CSharpier and re-stages them | (runs on `git commit`) |
+| 14 | [`git/hooks/pre-push`](git/hooks/pre-push) | Blocks a push while any C# file is unformatted | (runs on `git push`) |
+
+**Formatting rule:** C# is formatted with CSharpier before every push. After cloning, run `src/scripts/git/install-hooks.sh`; `git/commit-push.sh` installs the hooks itself if they are missing.
 
 ## Conventions
 

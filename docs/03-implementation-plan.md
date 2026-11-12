@@ -38,6 +38,7 @@
   - The gateway buffer is a transactional outbox. The reading, its sequence number and the machine state commit in one SQLite transaction, and the sender relays rows and deletes them only after the broker's acknowledgement.
   - The store writers are idempotent consumers. The unique key and the counters commit in the same database transaction as the insert, and offsets are stored only after that commit.
   - Idempotency at every hop is listed in doc 02 §4.6, and each row names its test.
+- Formatting: C# is formatted with CSharpier 1.4.0 (local tool, `src/backend/dotnet-tools.json`). The pre-commit hook formats staged `.cs` files automatically, and the pre-push hook blocks unformatted code (`src/scripts/git/install-hooks.sh`). Run `src/scripts/build/format.sh` before committing if the hooks are not installed.
 - Tests first: every task with logic starts with a failing test. Commits follow Conventional Commits and end with the `Co-Authored-By` trailer.
 
 ## Review Focus

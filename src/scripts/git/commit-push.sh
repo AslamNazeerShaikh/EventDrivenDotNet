@@ -38,6 +38,9 @@ case "$BRANCH" in
   main|development) echo "commit-push: refusing to work on protected branch '$BRANCH'" >&2; exit 2 ;;
 esac
 
+# The versioned hooks format C# on commit and block unformatted pushes.
+"$ROOT/src/scripts/git/install-hooks.sh" --check || "$ROOT/src/scripts/git/install-hooks.sh"
+
 git add -- "${PATHS[@]}"
 if git diff --cached --quiet; then echo "commit-push: nothing staged in: ${PATHS[*]}" >&2; exit 1; fi
 
