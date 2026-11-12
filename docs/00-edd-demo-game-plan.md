@@ -580,7 +580,7 @@ Commands (run from `src/backend/`, where `global.json` pins the SDK): `dotnet te
 
 ### Strict placement rules
 
-Nothing project-related lives at the repo root or directly under `src/`. The root holds only `README.md`, `LICENSE.md`, `.gitignore`, `AGENTS.md`, `docs/` and `src/`. Every file has exactly one home:
+Nothing project-related lives at the repo root or directly under `src/`. The root holds only `README.md`, `LICENSE.md`, `.gitignore`, `AGENTS.md`, `docs/`, and `src/`. Every file has exactly one home:
 
 | # | Anything related to | Lives only in | Never anywhere else |
 | --- | --- | --- | --- |
@@ -588,14 +588,14 @@ Nothing project-related lives at the repo root or directly under `src/`. The roo
 | 2 | Web: app code, `package.json`, `bun.lock`, frontend tests and coverage | `src/frontend/` | No frontend file outside it |
 | 3 | Runtime: `Dockerfile`, `compose.yaml`, Kafka, PostgreSQL and nginx configs, drill scripts | `src/deployment/` | No CI/CD, Docker, or environment config outside it |
 
-`src/deployment/` replaces the old `deploy/` name. Backend tests live in `src/backend/tests/`, not `src/tests/`. A file found outside its home is moved in the same commit, no exceptions.
+`src/deployment/` replaces the old `deploy/` name. Backend tests live in `src/backend/tests/`, not in `src/tests/`.
 
 ```text
 EventDrivenArchitecture/
 ├─ README.md, LICENSE.md, .gitignore, AGENTS.md
 ├─ docs/
 └─ src/
-   ├─ backend/                         # everything dotnet; run dotnet commands from here
+   ├─ backend/                         # everything dotnet. Dotnet commands run from src/backend/
    │  ├─ EventDrivenDesign.slnx
    │  ├─ Directory.Build.props
    │  ├─ Directory.Packages.props
@@ -615,7 +615,7 @@ EventDrivenArchitecture/
    │     ├─ EventDrivenDesign.IntegrationTests/
    │     └─ EventDrivenDesign.E2ETests/
    ├─ frontend/                        # everything web: React + Vite + TypeScript + Tailwind, Bun
-   └─ deployment/                      # everything runtime; docker context is src/
+   └─ deployment/                      # everything runtime. Docker context is src/
       ├─ Dockerfile                    # targets: gateway, consumer, api, dashboard
       ├─ compose.yaml
       ├─ kafka/create-topics.sh        # run by plant-topics
@@ -648,7 +648,7 @@ Build feature by feature. Each feature ends with something that runs and a green
 
 | # | Feature | Build | Done when |
 | --- | --- | --- | --- |
-| F0 | Housekeeping | Remove the items in section 12; bump the package pins; add the Compose skeleton with `plant-kafka`, `central-kafka` and `central-db` | `docker compose up` shows the three healthy; the unit tests pass |
+| F0 | Housekeeping | Remove the items in section 12; place every file per the section 12 rules; bump the package pins; add the Compose skeleton in `src/deployment/` with `plant-kafka`, `central-kafka` and `central-db` | From `src/deployment/`, `docker compose up` shows the three healthy; the unit tests pass |
 | F1 | Machine simulator | Catalogue, signal model, faults and alarms in Domain | Unit tests: the same seed gives the same series; values stay in band; a fault crosses its threshold once and yields one alarm |
 | F2 | Gateway buffer | Schema, single writer, tick transaction, sequence resume, lanes, delete-on-ack, backfill | Unit tests on temporary files, including close-and-reopen and simulated crashes between steps |
 | F3 | Gateway sender and host | Sender states, `/metrics`, `/control`, Dockerfile target, `plant-topics`, five gateways | An integration test: broker paused → rows stay → resumed → exact drain. Compose: 500 records/s on `machine.readings` |
