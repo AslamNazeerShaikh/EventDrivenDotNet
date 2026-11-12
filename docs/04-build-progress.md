@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13 built and under review. The branch is pushed to `origin/feat/plant-demo` after every step.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 13 in fix round 1. The branch is pushed to `origin/feat/plant-demo` after every step.
 
 ## 1. Where things are
 
@@ -41,7 +41,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 10 | Consumer host, drain cap | Done (malformed and incomplete records quarantined, never stuck) | `31fa8a7`, `7107eed`, `3c37261` | Clean after 1 fix round |
 | 11 | MirrorMaker 2, end-to-end check | Done (live: 500 machines → PostgreSQL, 0 gaps, 0 duplicate rows, redelivery absorbed; regex fixed to POSIX `[0-9]+`) | `7566fd9`, `18de8cb` | Clean after 1 fix round |
 | 12 | Proof, ETA, watermark maths | Done (PASS only when paused, drained, 0 missing, 0 gaps) | `df8f0d6` | Clean |
-| 13 | Control-room API | **Built; review running** (live: pause → WAIT → PASS with 0 missing, 0 gaps, 0 duplicate rows; overview answers with central down) | `d067b02` | Pending; range `f7953d7..d067b02` |
+| 13 | Control-room API | **Fix round 1 running** (live proof WAIT → PASS works) | `d067b02` | Needs fixes: no ETA while central is down; keep the newest DB sample (false-FAIL race) |
 | 14 | Dashboard | To do | — | — |
 | 15 | `drill.sh` | To do | — | — |
 | 16 | Cold-start rehearsal, README | To do | — | — |
@@ -101,7 +101,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Task 13's review is running (range `f7953d7..d067b02`). If the result is lost, re-review that range against `task-13-brief.md` and ledger Ruling 16. Then Task 14 (dashboard, `task-14-brief.md`).
+3. **Right now:** Task 13 is in fix round 1 (`d067b02`): a null ETA while central is down, and the DB-sample race. If the result is lost, look for a commit after `d067b02` touching `OverviewBuilder.cs`/`Pollers.cs`. If it exists, re-review `d067b02..HEAD` against the two findings in the ledger; otherwise re-dispatch them. Then Task 14 (dashboard, `task-14-brief.md`).
 4. Then dispatch Task 7b, then 8 to 16 in order, using each task's brief.
    - Generate a brief with `bash ~/.claude/plugins/cache/superpowers-dev/superpowers/7.0.2/skills/subagent-driven-development/scripts/task-brief "$PWD/docs/03-implementation-plan.md" N`, or copy the task's section of doc 03.
    - Refresh `global-constraints.md` from doc 03's Global Constraints whenever doc 03 changes.
