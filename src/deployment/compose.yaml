@@ -19,6 +19,26 @@ x-gateway: &gateway
   restart: on-failure
   networks: [plant]
 
+x-consumer: &consumer
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: consumer
+  environment: &consumer-env
+    Consumer__MaxRowsPerSecond: "1000"
+    Kafka__BootstrapServers: central-kafka:9092
+    ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    central-kafka:
+      condition: service_healthy
+    central-db:
+      condition: service_healthy
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  networks: [central]
+
 services:
   plant-kafka:
     image: apache/kafka:4.4.0
@@ -147,6 +167,18 @@ services:
       Gateway__Shop: ASM
       Gateway__Seed: "5000"
     volumes: [gateway-asm-data:/data]
+
+  consumer-1:
+    <<: *consumer
+    environment:
+      <<: *consumer-env
+      Consumer__Id: consumer-1
+
+  consumer-2:
+    <<: *consumer
+    environment:
+      <<: *consumer-env
+      Consumer__Id: consumer-2
 
 networks:
   plant:

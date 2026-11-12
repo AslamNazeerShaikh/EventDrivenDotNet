@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/backend/">
+    <Project Path="EventDrivenDesign.Consumer/EventDrivenDesign.Consumer.csproj" />
     <Project Path="EventDrivenDesign.Contracts/EventDrivenDesign.Contracts.csproj" />
     <Project Path="EventDrivenDesign.Domain/EventDrivenDesign.Domain.csproj" />
     <Project Path="EventDrivenDesign.Gateway/EventDrivenDesign.Gateway.csproj" />
