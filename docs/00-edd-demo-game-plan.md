@@ -580,7 +580,7 @@ Commands (run from `src/backend/`, where `global.json` pins the SDK): `dotnet te
 
 ### Strict placement rules
 
-Nothing project-related lives at the repo root or directly under `src/`. The root holds only `README.md`, `LICENSE.md`, `.gitignore`, `AGENTS.md`, `docs/`, and `src/`. Every file has exactly one home:
+Nothing project-related lives at the repo root or directly under `src/`. The root holds only `README.md`, `LICENSE.md`, `.gitignore`, `AGENTS.md`, `docs/`, and `src/`, plus tool-owned dot entries (`.claude/`, `.opencode/`, `.diagram-design`). The tools read these entries at the root. They hold no demo code. Every file has exactly one home:
 
 | # | Anything related to | Lives only in | Never anywhere else |
 | --- | --- | --- | --- |
