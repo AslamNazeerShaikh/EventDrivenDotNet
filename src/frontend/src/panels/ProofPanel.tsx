@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Reconciliation, Verdict } from "../api";
-import { formatInt } from "../format";
+import { formatInt, proofView } from "../format";
 import { Panel, Stat } from "./ui";
 
 const VERDICT: Record<Verdict, { symbol: string; text: string; cls: string; hint: string }> = {
@@ -10,9 +10,6 @@ const VERDICT: Record<Verdict, { symbol: string; text: string; cls: string; hint
 };
 
 const UNKNOWN = { symbol: "?", text: "UNKNOWN", cls: "border-amber-500 text-amber-300", hint: "The API sent a verdict this page does not know." };
-// A full check this young is newer than the light poll's view of duplicates, so its verdict wins.
-const FRESH_MS = 15_000;
-
 interface FullCheck {
   result: { data: Reconciliation; at: number } | undefined;
   pending: boolean;
@@ -22,11 +19,8 @@ interface FullCheck {
 export function ProofPanel({ proof, full, nowMs, note }: { proof: Reconciliation | undefined; full: FullCheck; nowMs: number; note?: string | undefined }) {
   const [open, setOpen] = useState(false);
   if (!proof) return <Panel title="Proof" note={note}><p className="text-muted">Waiting for the API…</p></Panel>;
-  const checked = full.result;
-  const fresh = checked !== undefined && nowMs - checked.at < FRESH_MS;
-  const verdict = fresh ? checked.data.verdict : proof.verdict;
+  const { verdict, duplicateRows, checkedAgoSeconds } = proofView(proof, full.result, nowMs);
   const v = VERDICT[verdict] ?? UNKNOWN;
-  const duplicateRows = checked?.data.duplicateRows ?? proof.duplicateRows;
   const machines = [...proof.machines].sort((a, b) => b.missing + b.gaps - (a.missing + a.gaps) || a.machineId.localeCompare(b.machineId));
   return (
     <Panel title="Proof" note={note}>
@@ -44,7 +38,7 @@ export function ProofPanel({ proof, full, nowMs, note }: { proof: Reconciliation
               ) : (
                 <>
                   {formatInt(duplicateRows)}
-                  {checked && <span className="block text-xs font-normal text-muted">checked {Math.max(0, Math.round((nowMs - checked.at) / 1000))} s ago</span>}
+                  {checkedAgoSeconds !== null && <span className="block text-xs font-normal text-muted">checked {checkedAgoSeconds} s ago</span>}
                 </>
               )
             }

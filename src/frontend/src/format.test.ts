@@ -1,5 +1,6 @@
+import type { Reconciliation } from "./api";
 import { describe, expect, test } from "bun:test";
-import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, shouldRequestFull } from "./format";
+import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, proofView, shouldRequestFull } from "./format";
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
 
@@ -94,4 +95,27 @@ describe("shouldRequestFull", () => {
   test("the first time paused and drained", () => expect(shouldRequestFull(settled, null, NOW)).toBe(true));
   test("not again within 10 s", () => expect(shouldRequestFull(settled, NOW - 9_999, NOW)).toBe(false));
   test("again after 10 s", () => expect(shouldRequestFull(settled, NOW - 10_000, NOW)).toBe(true));
+});
+
+describe("proofView", () => {
+  const rec = (o: Partial<Reconciliation>): Reconciliation => ({
+    generated: 10, stored: 10, missing: 0, gaps: 0, duplicatesAbsorbed: 0, duplicateRows: null,
+    paused: true, drained: true, verdict: "PASS", machines: [], ...o,
+  });
+  const full = (o: Partial<Reconciliation>, at = NOW - 4_000) => ({ data: rec({ duplicateRows: 0, ...o }), at });
+
+  test("both settled: the full result's duplicate rows with their age", () =>
+    expect(proofView(rec({}), full({}), NOW)).toEqual({ verdict: "PASS", duplicateRows: 0, checkedAgoSeconds: 4 }));
+  test("full says PASS but the live poll says WAIT: WAIT", () =>
+    expect(proofView(rec({ verdict: "WAIT", paused: false, drained: false }), full({}), NOW).verdict).toBe("WAIT"));
+  test("plant no longer paused and drained: not checked, no age", () =>
+    expect(proofView(rec({ verdict: "WAIT", paused: false, drained: false }), full({}), NOW)).toEqual({
+      verdict: "WAIT", duplicateRows: null, checkedAgoSeconds: null,
+    }));
+  test("paused but not yet drained: not checked", () =>
+    expect(proofView(rec({ verdict: "WAIT", drained: false }), full({}), NOW).duplicateRows).toBeNull());
+  test("no full check yet: not checked", () =>
+    expect(proofView(rec({}), undefined, NOW)).toEqual({ verdict: "PASS", duplicateRows: null, checkedAgoSeconds: null }));
+  test("a live FAIL is not hidden by an older full PASS", () =>
+    expect(proofView(rec({ verdict: "FAIL" }), full({ verdict: "PASS" }), NOW).verdict).toBe("FAIL"));
 });

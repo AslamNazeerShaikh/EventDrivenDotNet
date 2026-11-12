@@ -76,3 +76,18 @@ export function shouldRequestFull(
   if (!light || !light.paused || !light.drained) return false;
   return lastAttemptMs === null || nowMs - lastAttemptMs >= minGapMs;
 }
+
+// What the proof panel shows. The verdict is always the latest light poll's. The full check contributes only
+// its duplicate-row count, and only while the plant is still paused and drained; after that it is stale.
+export function proofView(
+  light: Reconciliation,
+  full: { data: Reconciliation; at: number } | undefined,
+  nowMs: number,
+): { verdict: Reconciliation["verdict"]; duplicateRows: number | null; checkedAgoSeconds: number | null } {
+  const usable = full !== undefined && light.paused && light.drained && full.data.duplicateRows !== null;
+  return {
+    verdict: light.verdict,
+    duplicateRows: usable ? full.data.duplicateRows : light.duplicateRows,
+    checkedAgoSeconds: usable ? Math.max(0, Math.round((nowMs - full.at) / 1000)) : null,
+  };
+}
