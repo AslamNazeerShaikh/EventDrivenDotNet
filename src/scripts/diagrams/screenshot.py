@@ -17,15 +17,22 @@ Usage:
   --clip X,Y,W,H   clip a rectangle, in CSS px relative to the page, or to
                    the <svg> when --svg is also given
   --wait MS        extra wait after load, for fonts and polling UIs (default 1500)
+  --run CMD        shell command to run once the page has loaded and polled for
+                   5 s, while the page stays open (for example a drill that
+                   breaks the stack, to see how an open page reacts)
+  --after SECONDS  wait this long after CMD finishes, before the screenshot
+                   (default 0; only used with --run)
 
 Requires: pip install playwright && playwright install chromium
 
 Examples:
+  python3 src/scripts/diagrams/screenshot.py http://localhost:3000 /tmp/down.png --full --run "src/deployment/scripts/drill.sh central-down" --after 20
   python3 src/scripts/diagrams/screenshot.py http://localhost:3000 /tmp/dash.png --width 390 --height 844 --full
   python3 src/scripts/diagrams/screenshot.py docs/diagrams/01-plant-to-central.html /tmp/top.png --svg --clip 0,0,1440,920
 """
 import argparse
 import pathlib
+import subprocess
 import sys
 
 
@@ -40,6 +47,8 @@ def main() -> int:
     p.add_argument("--svg", action="store_true")
     p.add_argument("--clip")
     p.add_argument("--wait", type=int, default=1500)
+    p.add_argument("--run")
+    p.add_argument("--after", type=float, default=0)
     a = p.parse_args()
 
     from playwright.sync_api import sync_playwright  # imported late so --help works without it
@@ -53,6 +62,12 @@ def main() -> int:
         page = browser.new_page(viewport={"width": a.width, "height": a.height}, device_scale_factor=a.scale)
         page.goto(target)
         page.wait_for_timeout(a.wait)
+        if a.run:
+            page.wait_for_timeout(5000)
+            if subprocess.run(a.run, shell=True).returncode != 0:
+                print(f"--run command failed: {a.run}", file=sys.stderr)
+                return 1
+            page.wait_for_timeout(a.after * 1000)
         kwargs = {"path": a.out, "full_page": a.full}
         ox = oy = 0.0
         if a.svg:
