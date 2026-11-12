@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using EventDrivenDesign.Contracts;
 
-namespace EventDrivenDesign.Messaging;
+namespace EventDrivenDesign.Infrastructure;
 
 /// <summary>CPU % is the TotalProcessorTime delta over wall time since the previous call (100 = one full core).</summary>
 public sealed class ProcessSampler

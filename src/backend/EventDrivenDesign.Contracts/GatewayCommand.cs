@@ -20,6 +20,11 @@ public sealed class GatewayCommandConverter : JsonConverter<GatewayCommand>
     public override GatewayCommand Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("GatewayCommand must be a JSON object.");
+        }
+
         string? kind = doc.RootElement.TryGetProperty("$type", out JsonElement t) ? t.GetString() : null;
         return kind switch
         {
