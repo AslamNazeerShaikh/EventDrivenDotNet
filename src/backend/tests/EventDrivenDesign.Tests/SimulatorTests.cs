@@ -82,6 +82,18 @@ public class SimulatorTests
     }
 
     [Fact]
+    public void Injecting_into_an_already_faulted_signal_changes_nothing()
+    {
+        var sim = Sim("BDY", 41, 2041);
+        sim.InjectFault(AlarmKind.Overheat).Should().BeTrue();
+        var ticks = new List<SimTick> { sim.Next() };
+        sim.InjectFault(AlarmKind.Overheat).Should().BeTrue();
+        ticks.AddRange(Enumerable.Range(0, 10).Select(_ => sim.Next()));
+        ticks.SelectMany(t => t.Alarms).Should().ContainSingle();
+        ticks[10].Signals["motor_temp_c"].Should().BeInRange(40, 70);
+    }
+
+    [Fact]
     public void Lower_bound_only_spec_faults_below_the_threshold()
     {
         var sim = Sim("ASM", 60, 1);

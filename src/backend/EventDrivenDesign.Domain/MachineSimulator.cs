@@ -44,6 +44,7 @@ public sealed class MachineSimulator(MachineInfo machine, int seed)
     {
         var s = _specs.FirstOrDefault(x => x.Kind == kind);
         if (s is null) return false;
+        if (_faults.ContainsKey(s.Name)) return true; // already faulted: no restart, no second alarm
         var margin = Math.Max(0.1 * (s.Max - s.Min), 0.5);
         _faults[s.Name] = new Fault(s.Above is { } a ? a + margin : s.Below!.Value - margin);
         return true;
