@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, Task 16 done, api.sh fixed; correcting doc 00 §14 drain timing next.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, doc 00 drain timing corrected; Task 14b next.
 
 ## 1. Where things are
 
@@ -108,7 +108,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** In order: (1) Correct doc 00 §14 step 4 to the measured drain: a 2.5-minute outage drains in about 2 min 15 s, consumers resume about 45 s after central-up, then run at 1.2–1.5k rows/s. (2) New Task 14b: the dashboard chart and alarms panels must keep their last data with a 'not updating' note while their endpoint fails, instead of 'Waiting for the API…'. Test-first with `bun test`, plus a live central-down screenshot. (3) The should-fix list below. (4) Resilience tier R1–R4 (section 5). (5) Final whole-branch review on Opus.
+3. **Right now:** In order: (1) New Task 14b: the dashboard chart and alarms panels must keep their last data with a 'not updating' note while their endpoint fails, instead of 'Waiting for the API…'. Test-first with `bun test`, plus a live central-down screenshot. (2) The should-fix list below. (3) Resilience tier R1–R4 (section 5). (4) Final whole-branch review on Opus.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;

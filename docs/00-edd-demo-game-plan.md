@@ -408,7 +408,7 @@ For each batch:
 3. Commit, then call `StoreOffset` for the last record of each partition. Auto-commit sends the stored offsets every 5 seconds, and the revoke handler commits them synchronously.
 4. If the database fails, retry the same batch with backoff and store no offsets.
 
-**Drain cap.** The readings loop inserts at most `Consumer__MaxRowsPerSecond` rows per second (default 1,000 per writer, so the two writers together drain at 2,000 per second, four times the live rate). A 2-minute outage then drains in about 40 seconds, long enough for the panel to watch the drain-time estimate and inject an alarm. `0` removes the cap, to measure the database's real capacity. The alarms loop is never capped.
+**Drain cap.** The readings loop inserts at most `Consumer__MaxRowsPerSecond` rows per second (default 1,000 per writer, so the two writers together drain at 2,000 per second, four times the live rate). Measured in the Task 16 rehearsal: the writers resume about 45 s after `central-up`, then insert 1,200 to 1,500 rows per second together, so a 2.5-minute outage drains in about 2 minutes 15 seconds. That is long enough for the panel to watch the drain-time estimate and inject an alarm. `0` removes the cap, to measure the database's real capacity. The alarms loop is never capped.
 
 ```sql
 WITH ins AS (
@@ -687,7 +687,7 @@ About 12 minutes, told as one story: break the central site, watch the plant car
 1. **The design (2 min).** Walk through doc 02's [diagram 1](diagrams/01-plant-to-central.svg): two tiers of buffering, one deduplication point.
 2. **Steady state.** Open `:3000`. Everything is green, 500 readings per second, freshness about 1 s.
 3. **Central down.** Run `drill.sh central-down` and wait 2 minutes. The plant keeps writing, plant alarms stay live, and about 60,000 readings build up in the plant cluster.
-4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds, then the database drains at the 4× cap as its ETA counts down (about 40 seconds). The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
+4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds. About 45 s later the store writers resume, and the database drains as its ETA counts down, in about as long as the outage lasted (2 minutes 15 seconds for a 2.5-minute outage in the rehearsal). The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
 5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts, its sequences continue, and its missed seconds are backfilled. Say up front that duplicates absorbed rises only if the kill lands between an acknowledgement and a delete; the central-down drill has already shown the counter working.
 6. **The proof.** Run `drill.sh proof`. Generated = stored for every machine, 0 gaps, 0 duplicate rows, and N duplicates absorbed: PASS.
 7. **Optional.** Run the WAN cut, plant broker and consumer crash drills.
