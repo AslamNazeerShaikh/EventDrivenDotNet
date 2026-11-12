@@ -61,7 +61,14 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
 
     public void SetCentral(OffsetSample sample, DateTimeOffset at) => Volatile.Write(ref _central, new(sample, at));
 
-    public void SetDb(DbSample sample, DateTimeOffset at) => Volatile.Write(ref _db, new(sample, at));
+    /// <summary><paramref name="startedAt"/> is when the query began. A result that began earlier than the stored one never replaces it.</summary>
+    public void SetDb(DbSample sample, DateTimeOffset startedAt)
+    {
+        var next = new Stamped<DbSample>(sample, startedAt);
+        Stamped<DbSample>? seen;
+        while ((seen = Volatile.Read(ref _db)) is null || seen.At <= startedAt)
+            if (Interlocked.CompareExchange(ref _db, next, seen) == seen) return;
+    }
 
     // The tails call these once per record: a lock-free monotonic max.
     public void SeenPlant(DateTimeOffset t) => Max(ref _plantNewestTicks, t.UtcTicks);

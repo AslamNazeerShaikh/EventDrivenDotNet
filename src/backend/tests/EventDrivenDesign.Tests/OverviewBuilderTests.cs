@@ -54,6 +54,44 @@ public class OverviewBuilderTests
         o.PlantKafka.Health.Should().BeOfType<Healthy>();
         o.Gateways.Should().OnlyContain(g => g.Health is Healthy);
         o.At.Should().Be(Now);
+        // the last known lag is 0, which must not read as "ETA 0": nothing is known while central is dark
+        o.ConsumerLag.Should().Be(0);
+        o.DrainEtaSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_stale_central_sample_gives_no_eta_even_with_a_backlog_and_live_consumers()
+    {
+        var s = Fresh(Now, lag: 3000);
+        s.SetCentral(Offsets(1000, 0), Now - TimeSpan.FromSeconds(30));
+        var o = OverviewBuilder.Build(s, Now);
+        o.CentralKafka.Health.Should().BeOfType<Down>();
+        o.ConsumerLag.Should().Be(1000); // last known value
+        o.DrainEtaSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void Every_consumer_down_gives_no_eta()
+    {
+        var s = Fresh(Now, lag: 3000);
+        s.SetConsumer("consumer-1", Cons("consumer-1"), Now - TimeSpan.FromSeconds(30));
+        s.SetConsumer("consumer-2", Cons("consumer-2"), Now - TimeSpan.FromSeconds(30));
+        OverviewBuilder.Build(s, Now).DrainEtaSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void An_older_started_database_sample_never_replaces_a_newer_one()
+    {
+        var s = new Snapshot(Shops, []);
+        var newer = new DbSample([new("m1", 10, 10, Now)], 10, 10);
+        var older = new DbSample([new("m1", 7, 10, Now)], 7, 10);
+        s.SetDb(newer, Now + TimeSpan.FromSeconds(2));
+        s.SetDb(older, Now);
+        s.Db!.Value.Should().BeSameAs(newer);
+        s.Db.At.Should().Be(Now + TimeSpan.FromSeconds(2));
+        var newest = new DbSample([new("m1", 11, 11, Now)], 11, 11);
+        s.SetDb(newest, Now + TimeSpan.FromSeconds(3));
+        s.Db!.Value.Should().BeSameAs(newest);
     }
 
     [Fact]
@@ -100,13 +138,13 @@ public class OverviewBuilderTests
     }
 
     // Gateways went quiet 5 s ago, so the 1 s old offsets are well past the settle time; every source answered just now.
-    private static Snapshot Settled()
+    private static Snapshot Settled(DateTimeOffset? dbAt = null)
     {
         var s = Fresh(Now - TimeSpan.FromSeconds(5), paused: true);
         s.SetGateway("PRS", Gw("PRS", true, 0, 0, ("P1-PRS-S001", 10)), Now);
         s.SetGateway("BDY", Gw("BDY", true, 0, 0, ("P1-BDY-W001", 5)), Now);
         s.SetCentral(Offsets(1000, 1000), Now);
-        s.SetDb(new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15), Now);
+        s.SetDb(new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15), dbAt ?? Now);
         s.SetPlantEnd(1000, Now);
         return s;
     }
@@ -169,9 +207,7 @@ public class OverviewBuilderTests
     [Fact]
     public void A_database_that_is_down_waits()
     {
-        var s = Settled();
-        s.SetDb(new DbSample([new("P1-PRS-S001", 10, 10, Now), new("P1-BDY-W001", 5, 5, Now)], 15, 15), Now - TimeSpan.FromSeconds(30));
-        OverviewBuilder.Reconcile(s, Now, null).Verdict.Should().Be("WAIT");
+        OverviewBuilder.Reconcile(Settled(dbAt: Now - TimeSpan.FromSeconds(30)), Now, null).Verdict.Should().Be("WAIT");
     }
 
     [Fact]

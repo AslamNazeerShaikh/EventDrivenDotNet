@@ -26,7 +26,9 @@ public static class OverviewBuilder
             new ClusterTile(Health(s.PlantEnd?.At, now), s.PlantEnd?.Value ?? 0, s.PlantNewest), MirrorLag(s),
             new ClusterTile(Health(s.Central?.At, now), s.Central?.Value.End.Values.Sum() ?? 0, s.CentralNewest),
             lag, consumers, new DatabaseTile(Health(db?.At, now), stored, freshness),
-            live, drain, Proof.DrainEtaSeconds(lag, drain, live));
+            live, drain, 
+            // Unknown, not "0": with central dark or every writer down the last lag is stale and the backlog is growing.
+            s.Central is null || Health(s.Central.At, now) is not Healthy || consumers.All(c => c.Health is Down) ? null : Proof.DrainEtaSeconds(lag, drain, live));
     }
 
     public static Reconciliation Reconcile(Snapshot s, DateTimeOffset now, long? duplicateRows)

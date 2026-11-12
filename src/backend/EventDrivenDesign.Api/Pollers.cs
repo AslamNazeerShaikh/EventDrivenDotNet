@@ -43,11 +43,12 @@ public sealed class Pollers(
     /// <summary>Also called by the reconciliation endpoint, so its verdict rests on progress read after the offsets.</summary>
     public async Task RefreshDbAsync(CancellationToken ct)
     {
+        var startedAt = clock.GetUtcNow(); // the sample is as old as its query's start: rows inserted meanwhile are not in it
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(SlowTimeout);
         var progress = await queries.ProgressAsync(cts.Token);
         var (received, inserted) = await queries.TotalsAsync("readings", cts.Token);
-        snapshot.SetDb(new DbSample(progress, received, inserted), clock.GetUtcNow());
+        snapshot.SetDb(new DbSample(progress, received, inserted), startedAt);
     }
 
     private async Task<T> Metrics<T>(string endpoint, CancellationToken ct)
