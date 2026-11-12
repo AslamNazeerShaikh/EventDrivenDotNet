@@ -9,7 +9,8 @@ public sealed record GatewayTile(
     long BufferedReadings,
     long BufferedAlarms,
     long OldestUnsentAgeMs,
-    long Generated
+    long Generated,
+    string? Instance // the shop's active instance; null when the shop has none
 );
 
 public sealed record ClusterTile(
@@ -47,7 +48,8 @@ public sealed record MachineProof(
     long Generated,
     long Stored,
     long Missing,
-    long Gaps
+    long Gaps,
+    long Over // max(0, MaxSeq − generated): a second writer numbered beyond what the active instance generated
 );
 
 // Verdict is one of "PASS", "WAIT", "FAIL".
@@ -61,7 +63,8 @@ public sealed record Reconciliation(
     bool Paused,
     bool Drained,
     string Verdict,
-    IReadOnlyList<MachineProof> Machines
+    IReadOnlyList<MachineProof> Machines,
+    long Over
 );
 
 public sealed record ChartPoint(DateTimeOffset BucketStart, long Readings, bool Provisional);

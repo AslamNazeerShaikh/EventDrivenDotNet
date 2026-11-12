@@ -128,45 +128,95 @@ services:
     restart: "no"
     networks: [plant]
 
-  gateway-prs:
+  gateway-prs-a:
     <<: *gateway
     environment:
       <<: *gateway-env
       Gateway__Shop: PRS
+      Gateway__Instance: gateway-prs-a
       Gateway__Seed: "1000"
-    volumes: [gateway-prs-data:/data]
+    volumes: [gateway-prs-a-data:/data]
 
-  gateway-bdy:
+  gateway-prs-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PRS
+      Gateway__Instance: gateway-prs-b
+      Gateway__Seed: "1000"
+    volumes: [gateway-prs-b-data:/data]
+
+  gateway-bdy-a:
     <<: *gateway
     environment:
       <<: *gateway-env
       Gateway__Shop: BDY
+      Gateway__Instance: gateway-bdy-a
       Gateway__Seed: "2000"
-    volumes: [gateway-bdy-data:/data]
+    volumes: [gateway-bdy-a-data:/data]
 
-  gateway-pnt:
+  gateway-bdy-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: BDY
+      Gateway__Instance: gateway-bdy-b
+      Gateway__Seed: "2000"
+    volumes: [gateway-bdy-b-data:/data]
+
+  gateway-pnt-a:
     <<: *gateway
     environment:
       <<: *gateway-env
       Gateway__Shop: PNT
+      Gateway__Instance: gateway-pnt-a
       Gateway__Seed: "3000"
-    volumes: [gateway-pnt-data:/data]
+    volumes: [gateway-pnt-a-data:/data]
 
-  gateway-mch:
+  gateway-pnt-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PNT
+      Gateway__Instance: gateway-pnt-b
+      Gateway__Seed: "3000"
+    volumes: [gateway-pnt-b-data:/data]
+
+  gateway-mch-a:
     <<: *gateway
     environment:
       <<: *gateway-env
       Gateway__Shop: MCH
+      Gateway__Instance: gateway-mch-a
       Gateway__Seed: "4000"
-    volumes: [gateway-mch-data:/data]
+    volumes: [gateway-mch-a-data:/data]
 
-  gateway-asm:
+  gateway-mch-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: MCH
+      Gateway__Instance: gateway-mch-b
+      Gateway__Seed: "4000"
+    volumes: [gateway-mch-b-data:/data]
+
+  gateway-asm-a:
     <<: *gateway
     environment:
       <<: *gateway-env
       Gateway__Shop: ASM
+      Gateway__Instance: gateway-asm-a
       Gateway__Seed: "5000"
-    volumes: [gateway-asm-data:/data]
+    volumes: [gateway-asm-a-data:/data]
+
+  gateway-asm-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: ASM
+      Gateway__Instance: gateway-asm-b
+      Gateway__Seed: "5000"
+    volumes: [gateway-asm-b-data:/data]
 
   mm2:
     image: apache/kafka:4.4.0
@@ -205,7 +255,7 @@ services:
       dockerfile: deployment/Dockerfile
       target: api
     environment:
-      Api__Gateways: gateway-prs:8080,gateway-bdy:8080,gateway-pnt:8080,gateway-mch:8080,gateway-asm:8080
+      Api__Gateways: gateway-prs-a:8080,gateway-prs-b:8080,gateway-bdy-a:8080,gateway-bdy-b:8080,gateway-pnt-a:8080,gateway-pnt-b:8080,gateway-mch-a:8080,gateway-mch-b:8080,gateway-asm-a:8080,gateway-asm-b:8080
       Api__Consumers: consumer-1:8080,consumer-2:8080
       Kafka__Plant: plant-kafka:9092
       Kafka__Central: central-kafka:9092
@@ -246,8 +296,13 @@ volumes:
   plant-kafka-data:
   central-kafka-data:
   central-db-data:
-  gateway-prs-data:
-  gateway-bdy-data:
-  gateway-pnt-data:
-  gateway-mch-data:
-  gateway-asm-data:
+  gateway-prs-a-data:
+  gateway-prs-b-data:
+  gateway-bdy-a-data:
+  gateway-bdy-b-data:
+  gateway-pnt-a-data:
+  gateway-pnt-b-data:
+  gateway-mch-a-data:
+  gateway-mch-b-data:
+  gateway-asm-a-data:
+  gateway-asm-b-data:

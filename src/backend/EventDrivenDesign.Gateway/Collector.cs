@@ -58,6 +58,23 @@ public sealed class Collector
 
     public long Generated => _lastSeq.Values.Sum();
 
+    /// <summary>
+    /// Sets numbering and last device time from the given state; machines missing from it keep theirs.
+    /// Call it only while no CollectorService runs.
+    /// </summary>
+    public void Resume(IReadOnlyDictionary<string, MachineState> state)
+    {
+        foreach (var slot in _slots)
+        {
+            if (!state.TryGetValue(slot.Info.MachineId, out var s))
+                continue;
+            slot.Seqs[0] = s.LastSeq;
+            slot.Seqs[1] = s.LastAlarmSeq;
+            slot.LastDeviceMs = s.LastDeviceTimeMs;
+        }
+        _lastSeq = Snapshot();
+    }
+
     public bool InjectFault(string machineId, AlarmKind kind)
     {
         if (!_byId.TryGetValue(machineId, out var slot) || !slot.Specs.Any(s => s.Kind == kind))

@@ -28,6 +28,13 @@ export function healthLabel(h: ServiceHealth, nowMs: number): string {
   }
 }
 
+// "gateway-bdy-b" → "b": which of the pair is active. A shop without one shows a dash.
+export const instanceLabel = (instance: string | null): string => {
+  if (instance === null) return "—";
+  const i = instance.lastIndexOf("-");
+  return i >= 0 ? instance.slice(i + 1) : instance;
+};
+
 // A Down tile still carries its last rates; they are history, not live.
 export const isStale = (h: ServiceHealth): boolean => h.$type === "Down";
 

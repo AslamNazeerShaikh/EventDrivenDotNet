@@ -26,6 +26,20 @@ public class MessagingTests
     }
 
     [Fact]
+    public void Lease_settings_match_the_spec()
+    {
+        var c = KafkaConfigs.Lease("k:9092", "BDY", "gateway-bdy-a");
+        c.BootstrapServers.Should().Be("k:9092");
+        c.GroupId.Should().Be("gateway-lease-bdy");
+        c.GroupInstanceId.Should().Be("gateway-bdy-a");
+        c.SessionTimeoutMs.Should().Be(6000);
+        c.HeartbeatIntervalMs.Should().Be(2000);
+        c.PartitionAssignmentStrategy.Should().Be(PartitionAssignmentStrategy.CooperativeSticky);
+        c.EnableAutoCommit.Should().BeFalse();
+        c.AutoOffsetReset.Should().Be(AutoOffsetReset.Latest);
+    }
+
+    [Fact]
     public void Store_writer_settings_match_the_spec()
     {
         var c = KafkaConfigs.StoreWriter("kafka:9092", "store-writers");

@@ -1,5 +1,5 @@
 import type { Overview } from "../api";
-import { formatEta, formatInt, formatSeconds, isStale } from "../format";
+import { formatEta, formatInt, formatSeconds, instanceLabel, isStale } from "../format";
 import { Panel, Stat } from "./ui";
 
 export function BuffersLag({ overview }: { overview: Overview | undefined }) {
@@ -12,8 +12,10 @@ export function BuffersLag({ overview }: { overview: Overview | undefined }) {
         {overview.gateways.map((g) => {
           const stale = isStale(g.health);
           return (
-            <li key={g.shop} className="grid grid-cols-[3rem_1fr_auto] items-center gap-3">
-              <span className="font-mono font-semibold">{g.shop}</span>
+            <li key={g.shop} className="grid grid-cols-[6rem_1fr_auto] items-center gap-3">
+              <span className="font-mono font-semibold">
+                {g.shop} · {instanceLabel(g.instance)}
+              </span>
               <div
                 role="meter"
                 aria-label={`${g.shop} buffered`}

@@ -42,6 +42,7 @@ T = {  # node treatments: fill, stroke, width, dash, tag colour
     "store":   ("rgba(45,49,66,0.05)", MUTED, 1, None, "rgba(79,93,117,0.9)"),
     "input":   ("rgba(79,93,117,0.10)", SOFT, 1, None, "rgba(90,101,128,0.9)"),
     "prod":    ("rgba(45,49,66,0.03)", "rgba(45,49,66,0.55)", 1, "4,3", "rgba(45,49,66,0.8)"),
+    "standby": ("#ffffff", INK, 1, "6,4", "rgba(45,49,66,0.8)"),
     "chip":    ("rgba(45,49,66,0.03)", "rgba(45,49,66,0.30)", 0.8, None, None),
 }
 
@@ -211,21 +212,17 @@ listeners = [
 for (n, ls), m, x in zip(listeners, MEDIA, MEDX):
     chip(x, 524, 300, 56, n, ls, ic=m)
 
-# ---------------------------------------------------------------- plant: gateways
+# ---------------------------------------------------------------- plant: gateways (active/standby pairs)
 for (code, *_), x, cx in zip(shops, COLX, COLC):
     s = code.lower()
     vline(cx, 592, 640, "FORWARD + ACK")
-    node(x, 216 + D, 240, 244, "service", "EDGE GATEWAY", "container", f"gateway-{s}",
-         ["EventDrivenDesign.Gateway · .NET 11", "aspnet:11.0 · Kestrel :8080 · 256 MB"])
-    chip(x + 12, 288 + D, 216, 36, "Collector", ["100 machines · tick every 1 s"])
-    chip(x + 12, 340 + D, 216, 36, "buffer.db · SQLite", ["WAL · synchronous=FULL · fsync/s"], kind="store")
-    chip(x + 12, 392 + D, 216, 36, "Sender · Confluent.Kafka", ["alarms first · delete after ack"])
-    nodes.append(icon("file", x + 202, 346 + D, MUTED))
-    nodes.append(text(x + 12, 448 + D, f"vol gateway-{s}-data → /data", 9, MUTED))
-    # in-box pipeline: collector → buffer → sender (drawn with the nodes so it sits on top of the gateway fill)
-    for y1, y2 in ((324 + D, 340 + D), (376 + D, 392 + D)):
-        nodes.append(f'<line x1="{cx}" y1="{y1}" x2="{cx}" y2="{y2}" stroke="{MUTED}" stroke-width="1" marker-end="url(#arrow)"/>')
-    vline(cx, 460 + D, 516 + D, "ACKS=ALL :9092")
+    node(x, 216 + D, 240, 100, "service", "EDGE GATEWAY · ACTIVE", "container", f"gateway-{s}-a",
+         ["EventDrivenDesign.Gateway · .NET 11", "collector → buffer → sender · backfill"])
+    nodes.append(text(x + 12, 292 + D, f"vol gateway-{s}-a-data → /data", 9, MUTED))
+    node(x, 328 + D, 240, 100, "standby", "STANDBY", "container", f"gateway-{s}-b",
+         [f"lease: gateway.lease.{s} · 1 partition", "static member · session 6 s"])
+    nodes.append(text(x + 12, 414 + D, f"vol gateway-{s}-b-data → /data", 9, MUTED))
+    vline(cx, 440 + D, 516 + D, "ACKS=ALL :9092")
 
 # ---------------------------------------------------------------- plant: broker (focal 1)
 node(52, 516 + D, 1320, 124, "focal", "BROKER · KRAFT", "queue", "plant-kafka · Apache Kafka 4.4",
@@ -302,7 +299,7 @@ node(1456, 72, 320, 112, "service", "WEB", "desktop", "dashboard",
 vline(1616, 184, 240, "HTTP /API", color=LINK, marker="arrow-link")
 node(1456, 240, 320, 1180 + D, "service", "API", "monitoring", "api · control-room API",
      ["EventDrivenDesign.Api · .NET 11", "ASP.NET Core minimal API · :8080", "256 MB · joins plant, central and ops"])
-chip(1468, 356 + D, 296, 76, "Gateways ×5 · HTTP", ["GET gateway-*:8080/metrics · 1 s", "POST gateway-*:8080/control",
+chip(1468, 356 + D, 296, 76, "Gateways ×10 (5 pairs) · HTTP", ["GET gateway-*:8080/metrics · 1 s", "POST gateway-*:8080/control",
                                                      "Pause · Resume · InjectFault"])
 chip(1468, 540 + D, 296, 76, "Plant Kafka · AdminClient", ["end offsets per partition · 2 s", "tail: newest device time",
                                                             "tail: the last 50 alarms"])
@@ -326,8 +323,8 @@ cols = [(64, "#"), (92, "STORE"), (268, "OBJECT"), (468, "WRITTEN BY"), (708, "W
 rows = [
     ("buffer.db (SQLite)", "outbox · insert", "gateway writer thread (only writer)", "every 1 s tick: INSERT the tick's readings and alarms in 1 tx, fsync", "gateway sender", "SELECT … ORDER BY lane, id LIMIT 1,000 (5,000 when catching up)"),
     ("", "outbox · delete", "gateway writer thread", "after each delivery report: DELETE the acknowledged ids, never before", "—", "—"),
-    ("", "machine_state", "gateway writer thread", "same tx as the tick: last_seq, last_alarm_seq, last_device_time_ms", "gateway at start", "resume numbering; on a new file, rebuild it from plant Kafka first"),
-    ("plant-kafka", "machine.readings · .alarms", "5 gateways (producers)", "continuous: acks=all, idempotent, key = machine_id, lz4", "mm2 · api tail", "mm2 copies from its saved offset; the api reads the newest device time"),
+    ("", "machine_state", "gateway writer thread", "same tx as the tick: last_seq, last_alarm_seq, last_device_time_ms", "every lease assignment", "reconcile with plant Kafka, then backfill; resume numbering"),
+    ("plant-kafka", "machine.readings · .alarms", "5 active gateways (producers)", "continuous: acks=all, idempotent, key = machine_id, lz4", "mm2 · api tail", "mm2 copies from its saved offset; the api reads the newest device time"),
     ("central-kafka", "plant1.machine.*", "mm2", "continuous, at-least-once, with the plant1. prefix", "consumers · api tail", "2 consumer groups poll batches; the api reads the newest mirrored time"),
     ("", "mm2-offsets · offset-syncs", "mm2", "after each produce acknowledgement", "mm2 at restart", "resume the copy; anything re-copied is absorbed by the DB key"),
     ("", "__consumer_offsets", "consumers", "stored after the DB commit, sent every 5 s", "consumers at restart", "resume; anything redelivered is absorbed by the DB key"),
@@ -357,7 +354,8 @@ legend = [f'<line x1="40" y1="{LY}" x2="1800" y2="{LY}" stroke="rgba(45,49,66,0.
           text(40, LY + 20, "LEGEND", 8, MUTED, MONO, spacing="0.14em")]
 items = [("box", "focal", "Focal: plant Kafka and the central DB"), ("box", "service", "Container"),
          ("box", "store", "Durable store or file"), ("box", "input", "Devices (input)"),
-         ("box", "prod", "Production only: simulated in the demo"), ("box", "chip", "Inside a container"),
+         ("box", "prod", "Production only: simulated in the demo"), ("box", "standby", "Standby"),
+         ("box", "chip", "Inside a container"),
          ("line", MUTED, "Data flow"), ("line", LINK, "HTTP call"), ("dash", MUTED, "Passive read"),
          ("icon", "ethernet", "RJ45 LAN"), ("icon", "wifi", "Wi-Fi"), ("icon", "bluetooth", "Bluetooth"), ("icon", "serial", "Serial")]
 x = 40

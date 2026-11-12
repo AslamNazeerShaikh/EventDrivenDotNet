@@ -1,6 +1,6 @@
 import type { Reconciliation } from "./api";
 import { describe, expect, test } from "bun:test";
-import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, isStale, mirrorHealth, panelNote, proofView, shouldRequestFull } from "./format";
+import { agoText, fillBuckets, formatEta, formatInt, formatSeconds, healthLabel, instanceLabel, isStale, mirrorHealth, panelNote, proofView, shouldRequestFull } from "./format";
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
 
@@ -19,6 +19,11 @@ describe("agoText", () => {
   test("seconds", () => expect(agoText("2026-11-12T11:59:57Z", NOW)).toBe("3 s ago"));
   test("minutes", () => expect(agoText("2026-11-12T11:57:00Z", NOW)).toBe("3 min ago"));
   test("a clock slightly ahead is now, not negative", () => expect(agoText("2026-11-12T12:00:02Z", NOW)).toBe("0 s ago"));
+});
+
+describe("instanceLabel", () => {
+  test("strips the gateway- and the shop", () => expect(instanceLabel("gateway-bdy-b")).toBe("b"));
+  test("null is a dash", () => expect(instanceLabel(null)).toBe("—"));
 });
 
 describe("isStale", () => {

@@ -14,7 +14,8 @@ public sealed record GatewayMetrics(
     long SendErrors,
     long BufferBytes,
     IReadOnlyDictionary<string, long> LastSeqByMachine,
-    ProcessStats Process
+    ProcessStats Process,
+    string Role // "active" or "standby"
 );
 
 public sealed record ConsumerMetrics(

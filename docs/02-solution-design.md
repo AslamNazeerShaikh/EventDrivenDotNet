@@ -88,7 +88,7 @@ Why the hybrid wins:
 
 ## 3. Architecture
 
-![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five edge gateways (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, a control-room API and dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
+![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five active/standby gateway pairs (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, a control-room API and dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
 
 *Source: [01-plant-to-central.html](diagrams/01-plant-to-central.html)*
 

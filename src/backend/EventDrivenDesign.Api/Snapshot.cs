@@ -22,7 +22,7 @@ public sealed record DbSample(IReadOnlyList<ProgressRow> Progress, long Received
 /// The latest value from every source, each with its last-success time. Pollers write, requests read:
 /// every slot is replaced whole, so a reader never sees a half-written value and never waits on a source.
 /// </summary>
-public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> consumers)
+public sealed class Snapshot(IEnumerable<string> gateways, IEnumerable<string> consumers)
 {
     private readonly ConcurrentDictionary<string, Stamped<GatewayMetrics>> _gateways = new();
     private readonly ConcurrentDictionary<string, Stamped<ConsumerMetrics>> _consumers = new();
@@ -34,11 +34,23 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
     private long _plantNewestTicks;
     private long _centralNewestTicks;
 
-    public IReadOnlyList<string> Shops { get; } = [.. shops];
+    /// <summary>The configured gateway instances: "gateway-bdy-a", …</summary>
+    public IReadOnlyList<string> Instances { get; } = [.. gateways];
+
+    public IReadOnlyList<string> Shops { get; } = [.. gateways.Select(Pollers.ShopOf).Distinct()];
 
     public IReadOnlyList<string> Consumers { get; } = [.. consumers];
 
-    public Stamped<GatewayMetrics>? Gateway(string shop) => _gateways.GetValueOrDefault(shop);
+    /// <summary>One instance's latest metrics, or null when it never answered.</summary>
+    public Stamped<GatewayMetrics>? Instance(string instance) =>
+        _gateways.GetValueOrDefault(instance);
+
+    /// <summary>The shop's active instance: of its instances whose last metrics say Role is active, the most recently polled.</summary>
+    public Stamped<GatewayMetrics>? Gateway(string shop) =>
+        _gateways
+            .Values.Where(v => v.Value.Shop == shop && v.Value.Role == "active")
+            .OrderByDescending(v => v.At)
+            .FirstOrDefault();
 
     public Stamped<ConsumerMetrics>? Consumer(string id) => _consumers.GetValueOrDefault(id);
 
@@ -55,17 +67,17 @@ public sealed class Snapshot(IEnumerable<string> shops, IEnumerable<string> cons
 
     public DateTimeOffset? CentralNewest => Newest(ref _centralNewestTicks);
 
-    /// <summary>When this gateway was first seen paused with nothing buffered, in its current such streak.</summary>
-    public DateTimeOffset? SettledSince(string shop) =>
-        _settledSince.TryGetValue(shop, out var t) ? t : null;
+    /// <summary>When this instance was first seen paused with nothing buffered, in its current such streak.</summary>
+    public DateTimeOffset? SettledSince(string instance) =>
+        _settledSince.TryGetValue(instance, out var t) ? t : null;
 
-    public void SetGateway(string shop, GatewayMetrics m, DateTimeOffset at)
+    public void SetGateway(string instance, GatewayMetrics m, DateTimeOffset at)
     {
-        _gateways[shop] = new(m, at);
+        _gateways[instance] = new(m, at);
         if (m.Paused && m.BufferedReadings + m.BufferedAlarms == 0)
-            _settledSince.TryAdd(shop, at);
+            _settledSince.TryAdd(instance, at);
         else
-            _settledSince.TryRemove(shop, out _);
+            _settledSince.TryRemove(instance, out _);
     }
 
     public void SetConsumer(string id, ConsumerMetrics m, DateTimeOffset at) =>

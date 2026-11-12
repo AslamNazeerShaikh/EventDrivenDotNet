@@ -18,6 +18,7 @@ export interface GatewayTile {
   bufferedAlarms: number;
   oldestUnsentAgeMs: number;
   generated: number;
+  instance: string | null;
 }
 export interface ClusterTile {
   health: ServiceHealth;

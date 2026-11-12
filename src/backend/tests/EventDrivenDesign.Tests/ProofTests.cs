@@ -16,6 +16,24 @@ public class ProofTests
     private static readonly ProgressRow[] Complete = [Row("A", 10, 10), Row("B", 5, 5)];
 
     [Fact]
+    public void Stored_past_generated_is_FAIL()
+    {
+        var r = Proof.Reconcile(
+            new Dictionary<string, long> { ["A"] = 1000 },
+            [Row("A", 1060, 1060)],
+            0,
+            null,
+            true,
+            true
+        );
+        r.Missing.Should().Be(0);
+        r.Gaps.Should().Be(0);
+        r.Over.Should().Be(60);
+        r.Machines.Single().Over.Should().Be(60);
+        r.Verdict.Should().Be("FAIL");
+    }
+
+    [Fact]
     public void Matching_counts_when_paused_and_drained_pass()
     {
         var r = Proof.Reconcile(Generated, Complete, 0, 0, allPaused: true, drained: true);

@@ -23,9 +23,14 @@ public sealed class Pollers(
     private static readonly TimeSpan HttpTimeout = TimeSpan.FromMilliseconds(800);
     private static readonly TimeSpan SlowTimeout = TimeSpan.FromSeconds(2);
 
-    /// <summary>The shop code of a gateway endpoint: gateway-prs:8080 → PRS.</summary>
-    public static string ShopOf(string endpoint) =>
-        endpoint.Split(':')[0]["gateway-".Length..].ToUpperInvariant();
+    /// <summary>The shop code of a gateway endpoint: gateway-bdy-a:8080 → BDY.</summary>
+    public static string ShopOf(string endpoint)
+    {
+        var host = endpoint.Split(':')[0];
+        var name = host["gateway-".Length..];
+        var i = name.LastIndexOf('-');
+        return (i > 0 ? name[..i] : name).ToUpperInvariant();
+    }
 
     protected override Task ExecuteAsync(CancellationToken ct)
     {
@@ -60,7 +65,7 @@ public sealed class Pollers(
             gateways.Select(g =>
                 Loop(g, TimeSpan.FromSeconds(1), ct, async c =>
                     snapshot.SetGateway(
-                        ShopOf(g),
+                        g.Split(':')[0],
                         await Metrics<GatewayMetrics>(g, c),
                         clock.GetUtcNow()
                     )

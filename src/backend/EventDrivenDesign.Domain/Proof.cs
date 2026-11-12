@@ -36,16 +36,18 @@ public static class Proof
                     g,
                     stored,
                     Math.Max(0, g - stored),
-                    row is null ? 0 : row.MaxSeq - stored
+                    row is null ? 0 : row.MaxSeq - stored,
+                    row is null || !generated.ContainsKey(id) ? 0 : Math.Max(0, row.MaxSeq - g)
                 );
             })
             .ToList();
 
         var missing = machines.Sum(m => m.Missing);
         var gaps = machines.Sum(m => m.Gaps);
+        var over = machines.Sum(m => m.Over);
         var verdict =
             !(allPaused && drained) ? "WAIT"
-            : missing == 0 && gaps == 0 ? "PASS"
+            : missing == 0 && gaps == 0 && over == 0 ? "PASS"
             : "FAIL";
 
         return new Reconciliation(
@@ -58,7 +60,8 @@ public static class Proof
             allPaused,
             drained,
             verdict,
-            machines
+            machines,
+            over
         );
     }
 

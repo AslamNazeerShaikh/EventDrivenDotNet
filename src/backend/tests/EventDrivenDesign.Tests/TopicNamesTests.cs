@@ -8,6 +8,10 @@ namespace EventDrivenDesign.Tests;
 /// <summary>librdkafka compiles subscription patterns as POSIX ERE, which has no \d, \w or \s. .NET accepts them, so the guard checks the text.</summary>
 public sealed class TopicNamesTests
 {
+    [Fact]
+    public void Lease_topic_is_per_shop() =>
+        TopicNames.Lease("BDY").Should().Be("gateway.lease.bdy");
+
     [Theory]
     [InlineData(TopicNames.CentralReadingsPattern)]
     [InlineData(TopicNames.CentralAlarmsPattern)]

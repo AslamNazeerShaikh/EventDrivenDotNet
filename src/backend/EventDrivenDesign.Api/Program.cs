@@ -17,14 +17,14 @@ string[] Split(string key, string fallback) =>
     );
 var gateways = Split(
     "Api:Gateways",
-    "gateway-prs:8080,gateway-bdy:8080,gateway-pnt:8080,gateway-mch:8080,gateway-asm:8080"
+    "gateway-prs-a:8080,gateway-prs-b:8080,gateway-bdy-a:8080,gateway-bdy-b:8080,gateway-pnt-a:8080,gateway-pnt-b:8080,gateway-mch-a:8080,gateway-mch-b:8080,gateway-asm-a:8080,gateway-asm-b:8080"
 );
 var consumers = Split("Api:Consumers", "consumer-1:8080,consumer-2:8080");
 var plantBootstrap = config["Kafka:Plant"] ?? "plant-kafka:9092";
 var centralBootstrap = config["Kafka:Central"] ?? "central-kafka:9092";
 var connectionString = config["ConnectionStrings:Central"]
     ?? "Host=central-db;Username=edd;Password=edd;Database=edd";
-var gatewayShops = gateways.Select(Pollers.ShopOf).ToList();
+var gatewayInstances = gateways.Select(g => g.Split(':')[0]).ToList();
 
 builder.Services.AddGlobalExceptionHandling();
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -33,7 +33,9 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()); // for request bodies outside the contracts, e.g. { "kind": "Overheat" }
 });
 
-builder.Services.AddSingleton(new Snapshot(gatewayShops, consumers.Select(c => c.Split(':')[0])));
+builder.Services.AddSingleton(
+    new Snapshot(gatewayInstances, consumers.Select(c => c.Split(':')[0]))
+);
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton(sp => new CentralQueries(sp.GetRequiredService<NpgsqlDataSource>()));
 builder.Services.AddSingleton(_ => new HttpClient(
@@ -129,9 +131,15 @@ app.MapPost("/api/plant/resume", (Snapshot s, HttpClient http, CancellationToken
 
 app.MapPost(
     "/api/machines/{machineId}/faults",
-    async (string machineId, FaultRequest body, HttpClient http, CancellationToken ct) =>
+    async (
+        string machineId,
+        FaultRequest body,
+        HttpClient http,
+        Snapshot s,
+        CancellationToken ct
+    ) =>
     {
-        var gateway = ApiRoutes.GatewayFor(machineId);
+        var gateway = ApiRoutes.GatewayFor(machineId, s);
         if (gateway.Error is { } bad)
             return Failure(bad);
         try
@@ -195,7 +203,8 @@ static async Task<Result<T>> Db<T>(Func<CancellationToken, Task<T>> query, Cance
     }
 }
 
-// Pause and resume are idempotent at the gateway, so a retry after a partial failure is safe.
+// Pause and resume fan out to every configured instance, so a standby that takes over keeps the paused state.
+// The error lists the instances not reached. Idempotent at the gateway: a retry after a partial failure is safe.
 static async Task<IResult> FanOut(
     GatewayCommand command,
     Snapshot s,
@@ -203,14 +212,14 @@ static async Task<IResult> FanOut(
     CancellationToken ct
 )
 {
-    var shops = s.Shops;
+    var instances = s.Instances;
     var outcomes = await Task.WhenAll(
-        shops.Select(async shop =>
+        instances.Select(async instance =>
         {
             try
             {
                 using var response = await http.PostAsJsonAsync(
-                    $"http://gateway-{shop.ToLowerInvariant()}:8080/control",
+                    $"http://{instance}:8080/control",
                     command,
                     Json.Options,
                     ct
@@ -226,7 +235,7 @@ static async Task<IResult> FanOut(
             }
         })
     );
-    var failed = shops.Where((_, i) => !outcomes[i]).ToList();
+    var failed = instances.Where((_, i) => !outcomes[i]).ToList();
     return failed.Count == 0
         ? Results.StatusCode(StatusCodes.Status202Accepted)
         : Failure(

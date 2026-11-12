@@ -47,6 +47,28 @@ public class CollectorTests
     }
 
     [Fact]
+    public void Resume_restarts_numbering_from_the_given_state()
+    {
+        var collector = New();
+        for (var i = 0; i < 3; i++)
+            collector.Tick(T0.AddSeconds(i));
+        collector.Resume(
+            new Dictionary<string, MachineState>
+            {
+                ["P1-BDY-W042"] = new(
+                    "P1-BDY-W042",
+                    200,
+                    0,
+                    T0.AddSeconds(2).ToUnixTimeMilliseconds()
+                ),
+            }
+        );
+        var batch = collector.Tick(T0.AddSeconds(3));
+        Reading(batch, "P1-BDY-W042").Seq.Should().Be(201);
+        Reading(batch, "P1-BDY-W001").Seq.Should().Be(4);
+    }
+
+    [Fact]
     public void Resume_continues_numbering()
     {
         var resume = new Dictionary<string, MachineState>

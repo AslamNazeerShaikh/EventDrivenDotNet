@@ -55,10 +55,12 @@ public static class OverviewBuilder
                 foreach (var (machine, seq) in g.Value.LastSeqByMachine)
                     generated[machine] = Math.Max(generated.GetValueOrDefault(machine), seq);
 
-        var gateways = s.Shops.Select(shop => s.Gateway(shop)).ToList();
-        var fresh = gateways.All(g => g is not null && Health(g.At, now) is Healthy);
-        var allPaused = fresh && gateways.All(g => g!.Value.Paused);
-        var drained = fresh && IsDrained(s, gateways!, now);
+        // Every configured instance must be fresh; a pair whose shop has no active writer cannot be paused or drained for verification.
+        var instances = s.Instances.Select(s.Instance).ToList();
+        var fresh = instances.All(g => g is not null && Health(g.At, now) is Healthy);
+        var everyShopHasActive = s.Shops.All(shop => s.Gateway(shop) is not null);
+        var allPaused = fresh && everyShopHasActive && instances.All(g => g!.Value.Paused);
+        var drained = fresh && IsDrained(s, instances!, now);
         var db = s.Db?.Value;
 
         return Proof.Reconcile(
@@ -86,9 +88,11 @@ public static class OverviewBuilder
             ]
         );
 
+    // The drained check covers every configured instance, not just the active one: a standby with buffered rows,
+    // or one that has not answered, keeps the verdict at WAIT.
     private static bool IsDrained(
         Snapshot s,
-        List<Stamped<GatewayMetrics>> gateways,
+        List<Stamped<GatewayMetrics>> instances,
         DateTimeOffset now
     )
     {
@@ -100,11 +104,11 @@ public static class OverviewBuilder
             || Health(db.At, now) is not Healthy
         )
             return false;
-        if (gateways.Any(g => g.Value.BufferedReadings + g.Value.BufferedAlarms != 0))
+        if (instances.Any(g => g.Value.BufferedReadings + g.Value.BufferedAlarms != 0))
             return false;
         // The lag must be measured MirrorSettle after the last gateway went quiet, and the progress rows after the offsets were last
         // known to be final. The run start, not the newest sample: an offsets poll finishing mid-query must not make an old DB sample stale.
-        var quiet = s.Shops.Select(shop => s.SettledSince(shop)).ToList();
+        var quiet = s.Instances.Select(s.SettledSince).ToList();
         if (
             quiet.Any(q => q is null)
             || central.At < quiet.Max()!.Value + MirrorSettle
@@ -138,7 +142,7 @@ public static class OverviewBuilder
         DateTimeOffset now
     ) =>
         g is null
-            ? new(shop, Health(null, now), "Unknown", false, 0, 0, 0, 0, 0)
+            ? new(shop, Health(null, now), "Unknown", false, 0, 0, 0, 0, 0, null)
             : new(
                 shop,
                 Health(g.At, now),
@@ -148,7 +152,8 @@ public static class OverviewBuilder
                 g.Value.BufferedReadings,
                 g.Value.BufferedAlarms,
                 g.Value.OldestUnsentAgeMs,
-                g.Value.Generated
+                g.Value.Generated,
+                g.Value.GatewayId
             );
 
     private static ConsumerTile ConsumerTile(
