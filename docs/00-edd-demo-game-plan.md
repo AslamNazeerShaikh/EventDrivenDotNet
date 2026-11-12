@@ -89,6 +89,7 @@ Versions were checked on 12 November 2026. Pin them exactly.
 | 6 | `Testcontainers.Kafka`, `Testcontainers.PostgreSql` | 4.16.0 | Use `new KafkaBuilder("apache/kafka:4.4.0")`. Testcontainers' own CI only tests Kafka 4.1.1 |
 | 7 | `Microsoft.Extensions.TimeProvider.Testing` | 11.0.0 | `FakeTimeProvider` for the simulator tests |
 | 8 | `Microsoft.Playwright` | 1.64.1 | End-to-end tests; runs on the host |
+| 8a | `AwesomeAssertions` | 9.6.0 | Test assertions in the `.Should()` style. The Apache-2.0 fork of FluentAssertions, chosen because FluentAssertions 8 needs a paid licence for commercial use |
 | 9 | Bun | 1.4.4 | Frontend package manager and script runner; run Vite with `bunx --bun vite` |
 | 10 | React | 19.3.1 | |
 | 11 | Vite | 8.3.8 | |
@@ -582,7 +583,7 @@ Every feature is built test-first (red, green, refactor), and no production code
 
 | # | Level | Project and tools | Needs | Covers |
 | --- | --- | --- | --- | --- |
-| 1 | Unit | `src/backend/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; drain-cap pacing; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
+| 1 | Unit | `src/backend/tests/EventDrivenDesign.Tests`: xUnit.net v3 on Microsoft.Testing.Platform, with AwesomeAssertions | Nothing | Simulator determinism, bands and fault-to-alarm edges; sequence continuity across reopening a SQLite file (temporary file); lane ordering; delete-on-ack; backfill caps and the `DataGap` alarm; backoff bounds; drain-cap pacing; reconciliation, ETA and watermark maths; JSON contract shapes, including the `GatewayCommand` discriminator |
 | 2 | Integration | `src/backend/tests/EventDrivenDesign.IntegrationTests`: xUnit.net v3 + Testcontainers (`apache/kafka:4.4.0`, `postgres:18.6-alpine`) | Docker | The sender against a broker that is paused and resumed: rows stay, then drain, with exact counts. A consumer fed every record twice: one row each and duplicates absorbed = N. A consumer killed before storing offsets: the redelivery is absorbed. A gateway started on an empty file while the plant topic already holds its machines' readings: numbering continues past them. A gateway → Kafka → consumer → PostgreSQL pipeline with a broker outage in the middle: generated = stored, 0 gaps |
 | 3 | End-to-end | `src/backend/tests/EventDrivenDesign.E2ETests`: xUnit.net v3 + Microsoft.Playwright against `docker compose up` | The full stack | The dashboard turns healthy; a 30-second `central-down` drill followed by the proof shows PASS; an injected alarm appears at central |
 
