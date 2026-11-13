@@ -38,7 +38,8 @@ export const instanceLabel = (instance: string | null): string => {
 // A Down tile still carries its last rates; they are history, not live.
 export const isStale = (h: ServiceHealth): boolean => h.$type === "Down";
 
-export const formatSeconds = (s: number | null): string => (s === null ? "—" : `${Math.max(0, s).toFixed(1)} s`);
+export const formatSeconds = (s: number | null): string =>
+  s === null ? "—" : `${Math.max(0, s).toFixed(1)} s`;
 
 export function formatEta(s: number | null): string {
   if (s === null) return "—";
@@ -47,10 +48,16 @@ export function formatEta(s: number | null): string {
   return `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, "0")} s`;
 }
 
-export const formatInt = (n: number): string => Math.round(n).toLocaleString("en-US");
+export const formatInt = (n: number): string =>
+  Math.round(n).toLocaleString("en-US");
 
 // The API returns only buckets that have readings. Fill the whole window with zeros so an outage shows as a hole.
-export function fillBuckets(points: readonly ChartPoint[], nowMs: number, minutes: number, watermark: string | null): ChartPoint[] {
+export function fillBuckets(
+  points: readonly ChartPoint[],
+  nowMs: number,
+  minutes: number,
+  watermark: string | null,
+): ChartPoint[] {
   const known = new Map(points.map((p) => [Date.parse(p.bucketStart), p]));
   const wm = watermark === null ? null : Date.parse(watermark);
   const last = Math.floor(nowMs / BUCKET_MS) * BUCKET_MS;
@@ -69,7 +76,9 @@ export function fillBuckets(points: readonly ChartPoint[], nowMs: number, minute
 export const MIRROR_LAG_LIMIT_S = 10;
 export function mirrorHealth(lagSeconds: number | null): ServiceHealth {
   if (lagSeconds === null) return { $type: "Degraded", reason: "no data" };
-  return lagSeconds > MIRROR_LAG_LIMIT_S ? { $type: "Degraded", reason: "lagging" } : { $type: "Healthy" };
+  return lagSeconds > MIRROR_LAG_LIMIT_S
+    ? { $type: "Degraded", reason: "lagging" }
+    : { $type: "Healthy" };
 }
 
 // The duplicate scan reads the whole readings table, so it runs only once the plant is paused and drained,
@@ -90,17 +99,31 @@ export function proofView(
   light: Reconciliation,
   full: { data: Reconciliation; at: number } | undefined,
   nowMs: number,
-): { verdict: Reconciliation["verdict"]; duplicateRows: number | null; checkedAgoSeconds: number | null } {
-  const usable = full !== undefined && light.paused && light.drained && full.data.duplicateRows !== null;
+): {
+  verdict: Reconciliation["verdict"];
+  duplicateRows: number | null;
+  checkedAgoSeconds: number | null;
+} {
+  const usable =
+    full !== undefined &&
+    light.paused &&
+    light.drained &&
+    full.data.duplicateRows !== null;
   return {
     verdict: light.verdict,
     duplicateRows: usable ? full.data.duplicateRows : light.duplicateRows,
-    checkedAgoSeconds: usable ? Math.max(0, Math.round((nowMs - full.at) / 1000)) : null,
+    checkedAgoSeconds: usable
+      ? Math.max(0, Math.round((nowMs - full.at) / 1000))
+      : null,
   };
 }
 
 // A panel keeps its last data when its query fails. Before any success there is no such data to claim.
-export function panelNote(isError: boolean, hasData: boolean, reason: string | undefined): string | undefined {
+export function panelNote(
+  isError: boolean,
+  hasData: boolean,
+  reason: string | undefined,
+): string | undefined {
   if (!isError) return undefined;
   if (hasData) return "Not updating, showing the last data received.";
   const why = reason ?? "The API did not answer.";

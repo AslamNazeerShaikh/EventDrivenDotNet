@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "bunx --bun vite",
     "build": "tsc -b && bunx --bun vite build",
-    "test": "bun test"
+    "test": "bun test",
+    "fmt": "bun fmt"
   },
   "dependencies": {
     "@tanstack/react-query": "5.107.1",

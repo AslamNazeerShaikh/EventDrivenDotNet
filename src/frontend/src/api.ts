@@ -82,7 +82,15 @@ export interface Chart {
   points: ChartPoint[];
 }
 
-export const ALARM_KINDS = ["Overheat", "Vibration", "Overload", "EStop", "LowBattery", "OutOfBand", "DataGap"] as const;
+export const ALARM_KINDS = [
+  "Overheat",
+  "Vibration",
+  "Overload",
+  "EStop",
+  "LowBattery",
+  "OutOfBand",
+  "DataGap",
+] as const;
 export type AlarmKind = (typeof ALARM_KINDS)[number];
 export interface AlarmView {
   machineId: string;
@@ -107,9 +115,15 @@ export class ApiError extends Error {
 async function failure(res: Response): Promise<ApiError> {
   try {
     const p = (await res.json()) as { title?: string; detail?: string };
-    return new ApiError(p.title ?? `http.${res.status}`, p.detail ?? res.statusText);
+    return new ApiError(
+      p.title ?? `http.${res.status}`,
+      p.detail ?? res.statusText,
+    );
   } catch {
-    return new ApiError(`http.${res.status}`, res.statusText || "Request failed");
+    return new ApiError(
+      `http.${res.status}`,
+      res.statusText || "Request failed",
+    );
   }
 }
 
@@ -122,23 +136,39 @@ async function get<T>(path: string): Promise<T> {
 async function post(path: string, body?: unknown): Promise<void> {
   const res = await fetch(path, {
     method: "POST",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers:
+      body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) throw await failure(res);
 }
 
-const poll = { refetchInterval: 1000, refetchIntervalInBackground: true, retry: false } as const;
+const poll = {
+  refetchInterval: 1000,
+  refetchIntervalInBackground: true,
+  retry: false,
+} as const;
 
-export const useOverview = () => useQuery({ queryKey: ["overview"], queryFn: () => get<Overview>("/api/overview"), ...poll });
+export const useOverview = () =>
+  useQuery({
+    queryKey: ["overview"],
+    queryFn: () => get<Overview>("/api/overview"),
+    ...poll,
+  });
 // The polled call is the light one. The full call counts duplicate rows across the whole table, so see useFullCheck.
 export const useReconciliation = () =>
-  useQuery({ queryKey: ["reconciliation"], queryFn: () => get<Reconciliation>("/api/reconciliation"), ...poll });
+  useQuery({
+    queryKey: ["reconciliation"],
+    queryFn: () => get<Reconciliation>("/api/reconciliation"),
+    ...poll,
+  });
 
 // The full reconciliation (duplicate rows, per-machine table) on demand, and automatically at most every 10 s
 // while the plant is paused and drained. A failed attempt counts too, so a slow scan is not hammered.
 export function useFullCheck(light: Reconciliation | undefined) {
-  const [result, setResult] = useState<{ data: Reconciliation; at: number } | undefined>();
+  const [result, setResult] = useState<
+    { data: Reconciliation; at: number } | undefined
+  >();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const lastAttempt = useRef<number | null>(null);
@@ -148,7 +178,10 @@ export function useFullCheck(light: Reconciliation | undefined) {
     lastAttempt.current = Date.now();
     setPending(true);
     try {
-      setResult({ data: await get<Reconciliation>("/api/reconciliation?full=true"), at: Date.now() });
+      setResult({
+        data: await get<Reconciliation>("/api/reconciliation?full=true"),
+        at: Date.now(),
+      });
     } catch {
       // keep the previous result; the light poll and the banner report API trouble
     } finally {
@@ -161,17 +194,33 @@ export function useFullCheck(light: Reconciliation | undefined) {
   }, [light, check]);
   return { result, pending, check };
 }
-export const useChart = () => useQuery({ queryKey: ["chart"], queryFn: () => get<Chart>("/api/chart?minutes=10"), ...poll });
-export const useAlarms = () => useQuery({ queryKey: ["alarms"], queryFn: () => get<AlarmView[]>("/api/alarms"), ...poll });
+export const useChart = () =>
+  useQuery({
+    queryKey: ["chart"],
+    queryFn: () => get<Chart>("/api/chart?minutes=10"),
+    ...poll,
+  });
+export const useAlarms = () =>
+  useQuery({
+    queryKey: ["alarms"],
+    queryFn: () => get<AlarmView[]>("/api/alarms"),
+    ...poll,
+  });
 
 // Commands refresh everything straight away so the page does not wait for the next tick.
 function useCommand<V>(fn: (v: V) => Promise<void>) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: fn, onSettled: () => qc.invalidateQueries() });
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () => qc.invalidateQueries(),
+  });
 }
 export const usePause = () => useCommand<void>(() => pause());
 export const useResume = () => useCommand<void>(() => resume());
-export const useInjectFault = () => useCommand<{ machineId: string; kind: AlarmKind }>((v) => injectFault(v.machineId, v.kind));
+export const useInjectFault = () =>
+  useCommand<{ machineId: string; kind: AlarmKind }>((v) =>
+    injectFault(v.machineId, v.kind),
+  );
 
 export const pause = () => post("/api/plant/pause");
 export const resume = () => post("/api/plant/resume");

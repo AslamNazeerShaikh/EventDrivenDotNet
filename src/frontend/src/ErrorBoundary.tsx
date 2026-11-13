@@ -16,13 +16,17 @@ export class ErrorBoundary extends Component<Props, { failed: boolean }> {
   }
 
   override componentDidUpdate(prev: Props) {
-    if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false });
+    if (this.state.failed && prev.resetKey !== this.props.resetKey)
+      this.setState({ failed: false });
   }
 
   override render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <p role="alert" className="rounded border border-amber-400 bg-panel px-3 py-2 text-sm text-amber-300">
+      <p
+        role="alert"
+        className="rounded border border-amber-400 bg-panel px-3 py-2 text-sm text-amber-300"
+      >
         {this.props.label} could not be drawn. Retrying with the next update.
       </p>
     );
