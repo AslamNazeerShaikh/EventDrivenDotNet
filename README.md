@@ -41,7 +41,7 @@ Run these from `src/deployment/` (the script works from anywhere). Each one prin
 | 1 | `scripts/drill.sh central-down` | Central Kafka, the consumers and the database go Down. The plant keeps writing, and its alarms stay live. Mirror lag grows |
 | 2 | `scripts/drill.sh central-up` | Mirror lag clears in seconds, then the database drains as its ETA counts down. The chart's gap fills in |
 | 3 | `scripts/drill.sh failover BDY` | The shop's active gateway is killed; the standby takes over within about 15 s and the script prints how long it took. The killed one returns as the standby, with no second switch |
-| 4 | `scripts/drill.sh kill-gateway BDY` | The active gateway restarts from its disk and keeps the lease; its sequence numbers continue and missed seconds are backfilled |
+| 4 | `scripts/drill.sh kill-gateway BDY` | The active gateway is killed and restarted at once; the standby takes the lease and the restarted one rejoins as the standby. Sequence numbers continue and missed seconds are backfilled |
 | 5 | `scripts/drill.sh lose-gateway-disk BDY` | The active gateway's disk is deleted; the rebuilt instance continues numbering from the plant log, with 0 gaps |
 | 6 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
 | 7 | `scripts/drill.sh wan-cut` / `wan-restore`, `plant-down` / `plant-up` | Mirror lag, or the gateway buffers, grow and then clear |

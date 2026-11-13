@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 12:45 IST: Claude took over from opencode at 12:26. R1–R4 merged into feat/plant-demo (fast-forward to `afb9bd9`); pre-demo hardening (H1) in progress.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 12:55 IST: R1–R4 merged into feat/plant-demo and rehearsed live (every drill PASS except lose-gateway-disk, not re-run). Next: PR to development.
 
 ## 1. Where things are
 
@@ -53,7 +53,7 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | R2 build | Backfill missed seconds from machine history; DataGap beyond 600 s | Done (opencode) | `5d1aa1f` | Clean, 5 minors parked (muse-spark) |
 | R3 build | Active/standby gateway pairs on a Kafka lease: 10 gateways, fencing, standby reconcile, proof `Over` → FAIL | Done (opencode). Isolated-stack failover verified | `12edadc` | Clean, 11 minors parked (deepseek); Opus re-review running |
 | R4 build | Two APIs behind nginx, two MirrorMaker 2 workers, `restart: on-failure`, diagram 08 | Done (opencode). Kill-API, kill-MM2, central-down proof PASS 3,561,600 = 3,561,600 | `afb9bd9` | Clean, 6 minors parked (deepseek); final review (deepseek): merge-ready with conditions |
-| H1 | Pre-demo hardening: R1–R4 fast-forwarded into `feat/plant-demo`; README and doc 00 §14 for pairs and failover; duplicate-row scan gets 30 s; `drill.sh proof` prints `over` and tolerates a starting instance; full drill rehearsal on the 21-container stack | **In progress** (Claude) | — | — |
+| H1 | Pre-demo hardening: R1–R4 fast-forwarded into `feat/plant-demo`; README and doc 00 §14 for pairs and failover; duplicate-row scan fixed (6 s at 16 M rows); `drill.sh proof` prints `over` and tolerates a starting instance. Live rehearsal on the 21-container stack, proof PASS after each: central-down 90 s → up (16,142,600, 96,498 absorbed), kill-gateway BDY (standby took the lease in 1 s), failover BDY (takeover 7 s, no second switch), kill-consumer 1, plant-down 44 s → up (fenced new term) — all 0 missing, 0 gaps, over 0, 0 duplicate rows | Done (Claude); lose-gateway-disk not re-run (ruling 18) | `ddece29`, `520d207` | Opus re-review of R1–R3 pending |
 
 Tests on the branch: 170 unit (3 runs green), 19 integration and 47 frontend (`bun test`) tests passing, 0 warnings, C# formatted.
 
@@ -78,7 +78,7 @@ Tests on the branch: 170 unit (3 runs green), 19 integration and 47 frontend (`b
 | 15 | Opencode's stacked branches (`feat/plant-demo-rfix-docs`, `-r1` … `-r4`, one commit each, linear on `8b94fc0`) are fast-forwarded into `feat/plant-demo`; the side branches stay as they are | No conflicts, no history rewrite; `feat/plant-demo` stays the one branch to push |
 | 16 | The duplicate-row scan (`full=true`) gets 30 s instead of the 2 s query cap; `drill.sh proof` polls the light reconciliation until drained, then makes one full call | At 3.5 M rows the scan took over 2 s, so the proof printed "duplicate rows: None" while doc 00 §14 promises 0 on screen. The dashboard asks for it only when paused and drained, at most every 10 s |
 | 17 | The orphaned pre-R3 volumes `edd_gateway-<shop>-data` are kept, not deleted | Standing rule: never delete Docker volumes. They are small and unused |
-| 18 | `drill.sh lose-gateway-disk` is rehearsed even though it deletes one gateway volume | It is the approved drill 8; it deletes only that gateway's buffer, which is what it proves the system survives |
+| 18 | `drill.sh lose-gateway-disk` is not rehearsed on the post-R3 stack | It deletes a Docker volume, which the standing rule forbids without the user's go-ahead (the permission check blocked it). R1 passed it live before R3 |
 
 ## 5. Superseded: resilience tier (built as R1–R4, see section 3)
 
@@ -122,7 +122,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** H1, pre-demo hardening (Claude, from 12:26 IST). Done: R1–R4 fast-forwarded into feat/plant-demo and pushed; build 0 warnings, 170 unit, 19 integration, 47 frontend tests green; stack rebuilt (21 containers, each shop tile names its active instance); README and doc 00 §14 describe the pairs and the failover step; duplicate-row scan fixed (6 s at 16 M rows; live proof PASS 16,062,300 = 16,062,300, gaps 0, over 0, duplicate rows 0). In progress: full drill rehearsal (central-down/up running, then kill-gateway, failover, lose-gateway-disk, kill-consumer, proof after each); Opus re-review of R1–R3 code (read-only). Then: fix what they find, final rehearsal from 17:00 IST. The demo is at 19:00 IST.
+3. **Right now:** Ready for the PR from feat/plant-demo to development. Everything from opencode's five branches (cad43ae, R1–R4) is in feat/plant-demo; build 0 warnings, 170 unit, 19 integration, 47 frontend tests green; live drills PASS (section 3, row H1). Open: the Opus re-review of R1–R3 code (.superpowers/sdd/03-implementation-plan/r1-r3-opus-review.md) and lose-gateway-disk, which needs the user's go-ahead to delete a volume. Final rehearsal from 17:00 IST: README 'Run the demo', central-down 2 min, central-up, failover BDY, proof. The demo is at 19:00 IST.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
