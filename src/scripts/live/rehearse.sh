@@ -29,7 +29,7 @@ OUTAGE=${1:-120}
 SHOT=${2:-}
 ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 DRILL="$ROOT/src/deployment/scripts/drill.sh"
-API=http://localhost:3000/api
+API=http://localhost:4000/api
 results=()
 fails=0
 
@@ -112,7 +112,7 @@ record "8 Proof" $s "$(get verdict): generated $(get generated) = stored $(get s
 
 # 9 screenshot, then resume (the trap resumes too)
 if [[ -n $SHOT ]]; then
-  python3 "$ROOT/src/scripts/diagrams/screenshot.py" http://localhost:3000 "$SHOT" --full --wait 4000 > /dev/null 2>&1 \
+  python3 "$ROOT/src/scripts/diagrams/screenshot.py" http://localhost:4000 "$SHOT" --full --wait 4000 > /dev/null 2>&1 \
     && record "9 Dashboard screenshot" PASS "$SHOT" || record "9 Dashboard screenshot" FAIL "screenshot.py failed"
 fi
 "$DRILL" resume > /dev/null 2>&1

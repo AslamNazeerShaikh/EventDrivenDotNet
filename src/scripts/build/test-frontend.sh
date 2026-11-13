@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-frontend.sh: run the dashboard's unit tests and its strict build.
 #
-# Runs `bun test` (the pure formatters in src/frontend/src/format.ts), then
+# Runs `bun test` (the pure logic in src/frontend/src/format.ts and derive.ts), then
 # `bun run build` (tsc -b with "strict": true, then the Vite build). Installs
 # dependencies from bun.lock first if node_modules is missing.
 #

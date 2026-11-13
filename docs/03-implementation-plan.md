@@ -611,7 +611,7 @@ Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
 **Files:**
 - Create: `src/frontend/package.json`, `bun.lock`, `index.html`, `vite.config.ts`, `tsconfig.json`, `src/main.tsx`, `src/App.tsx`, `src/api.ts`, `src/index.css`, `src/panels/PipelineStrip.tsx`, `src/panels/BuffersLag.tsx`, `src/panels/ReadingsChart.tsx`, `src/panels/ProofPanel.tsx`, `src/panels/AlarmsPanel.tsx`
 - Create: `src/deployment/nginx/default.conf`
-- Modify: `src/deployment/Dockerfile` (stages `web` on `oven/bun:1.4.4-alpine`, target `dashboard` on `nginx:1.30-alpine-slim`), `src/deployment/compose.yaml` (`dashboard`, port 3000, network `ops`, 64 MB)
+- Modify: `src/deployment/Dockerfile` (stages `web` on `oven/bun:1.4.4-alpine`, target `dashboard` on `nginx:1.30-alpine-slim`), `src/deployment/compose.yaml` (`dashboard`, port 4000, network `ops`, 64 MB)
 
 **Interfaces:**
 - Consumes: the Task 1 API models over HTTP (`src/api.ts` mirrors them as TypeScript types; `ServiceHealth` arrives as `{ "$type": "Healthy" | "Degraded" | "Down", … }`).
@@ -620,10 +620,10 @@ Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
 - nginx: `location /api/ { proxy_pass http://api:8080; }`, SPA fallback to `index.html`.
 - `tsconfig.json`: `"types": ["vite/client"]` (TypeScript 7 defaults to none).
 
-- [ ] **Step 1: Scaffold with the exact versions.** In `src/frontend/`: `bun add react@19.3.1 react-dom@19.3.1 @tanstack/react-query@5.107.1 recharts@3.10.1 react-is@19.3.1` and `bun add -d vite@8.3.8 typescript@7.0.2 tailwindcss@4.3.5 @tailwindcss/vite@4.3.5 @vitejs/plugin-react @types/react @types/react-dom`. Scripts: `"build": "tsc -b && bunx --bun vite build"`, `"dev": "bunx --bun vite"` (dev proxy `/api` → `http://localhost:3000`).
+- [ ] **Step 1: Scaffold with the exact versions.** In `src/frontend/`: `bun add react@19.3.1 react-dom@19.3.1 @tanstack/react-query@5.107.1 recharts@3.10.1 react-is@19.3.1` and `bun add -d vite@8.3.8 typescript@7.0.2 tailwindcss@4.3.5 @tailwindcss/vite@4.3.5 @vitejs/plugin-react @types/react @types/react-dom`. Scripts: `"build": "tsc -b && bunx --bun vite build"`, `"dev": "bunx --bun vite"` (dev proxy `/api` → `http://localhost:4000`).
 - [ ] **Step 2: Write `api.ts` and the panels.**
 - [ ] **Step 3: Verify the build.** `bun run build`. Expected: the type check passes and `dist/` is written.
-- [ ] **Step 4: Verify live.** `docker compose up -d --build --wait`, open `http://localhost:3000`. Expected: green tiles, about 500 readings per second, the chart drawing, the proof showing `WAIT`.
+- [ ] **Step 4: Verify live.** `docker compose up -d --build --wait`, open `http://localhost:4000`. Expected: green tiles, about 500 readings per second, the chart drawing, the proof showing `WAIT`.
 - [ ] **Step 5: Commit.** `git commit -m "feat(frontend): add control-room dashboard"`
 
 ---
@@ -636,11 +636,11 @@ Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
 - Create: `src/deployment/scripts/drill.sh` (executable; run from `src/deployment/`)
 
 **Interfaces:**
-- Commands (§10): `central-down`, `central-up`, `kill-gateway <SHOP>`, `kill-consumer <N>`, `proof`, `pause`, `resume` (`curl -fsS -X POST http://localhost:3000/api/plant/pause` or `…/resume`); plus `wan-cut`, `wan-restore`, `plant-down` and `plant-up` as one line each (unrehearsed until Stretch 3).
+- Commands (§10): `central-down`, `central-up`, `kill-gateway <SHOP>`, `kill-consumer <N>`, `proof`, `pause`, `resume` (`curl -fsS -X POST http://localhost:4000/api/plant/pause` or `…/resume`); plus `wan-cut`, `wan-restore`, `plant-down` and `plant-up` as one line each (unrehearsed until Stretch 3).
   - `central-down` = `docker compose kill mm2 consumer-1 consumer-2` then `docker compose stop central-db central-kafka`.
   - `central-up` = `docker compose start central-kafka central-db consumer-1 consumer-2 mm2`.
 - `proof`:
-  1. `curl -fsS -X POST http://localhost:3000/api/plant/pause`.
+  1. `curl -fsS -X POST http://localhost:4000/api/plant/pause`.
   2. Poll `/api/reconciliation?full=true` every 2 s, for up to 5 minutes, until `drained` is true.
   3. Print generated, stored, missing, gaps, duplicate rows, duplicates absorbed and the verdict. Parse the JSON with `python3 -c`.
   4. Exit 0 only on `PASS`. Leave the plant paused; `resume` is a separate command.
@@ -658,7 +658,7 @@ Runs after Task 7 and before Task 8. Added on 12 November at the user's request.
 ### Task 16: Cold start, memory check and README
 
 **Files:**
-- Modify: `README.md` (a "Run the demo" section: prerequisites, `docker compose up -d --build --wait`, `http://localhost:3000`, the drill commands)
+- Modify: `README.md` (a "Run the demo" section: prerequisites, `docker compose up -d --build --wait`, `http://localhost:4000`, the drill commands)
 
 - [ ] **Step 1: Cold start.** `docker compose down -v && docker compose up -d --build --wait`. Expected: every service healthy or running; `plant-topics` exited 0.
 - [ ] **Step 2: Rehearse §14 steps 1–6** with `docker stats --no-stream` taken during `central-down` and during the drain. Expected: every container below its limit; no exit 137.
@@ -914,7 +914,7 @@ Needs R1 and R2. Doc 02 §4.3 ("Fault tolerance and zero downtime") and §4.10 r
 - [ ] **Step 7: Redraw diagram 01.** Edit the generator, run `python3 src/scripts/diagrams/gen01_plant_to_central.py`, then `src/scripts/diagrams/check.sh --export 01-plant-to-central`. Expected: both checks pass and the SVG is written. Update the diagram's alt text in doc 02 §3 to say five active/standby gateway pairs.
 - [ ] **Step 8: Verify live.** From `src/deployment/`:
   - `docker compose up -d --build --wait --remove-orphans`, then remove the old volumes: `docker volume rm edd_gateway-prs-data edd_gateway-bdy-data edd_gateway-pnt-data edd_gateway-mch-data edd_gateway-asm-data`.
-  - `curl -fsS http://localhost:3000/api/overview`. Expected: five gateway tiles `Healthy`, each naming its active instance, `gateway-<shop>-a` or `-b` (cooperative-sticky keeps join order, so either can win at start); a live rate of about 500, because standbys send nothing.
+  - `curl -fsS http://localhost:4000/api/overview`. Expected: five gateway tiles `Healthy`, each naming its active instance, `gateway-<shop>-a` or `-b` (cooperative-sticky keeps join order, so either can win at start); a live rate of about 500, because standbys send nothing.
   - `scripts/drill.sh failover BDY`. Expected (when `-a` is active; the script names whichever instance takes over): `gateway-bdy-b took over after N s`, with N ≤ 15; the script waits until `gateway-bdy-a` is back in `/api/overview` as a `Healthy` standby (cooperative-sticky keeps `-b` the owner, so there is no second switch).
   - `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps; the pause is re-sent on every poll, so the restarted `-a` is paused too. Then `scripts/drill.sh resume`.
   - `docker stats --no-stream`. Expected: every container below its limit.
@@ -970,12 +970,12 @@ Needs none of R1–R3. Doc 02 §4.3 (rows 3, 5, 7 and 8 of its table); §3, §6,
 - Diagram 08: it still shows five gateways, one `mm2` and one `api`. Redraw it as ten gateways (five active/standby pairs), `mm2-1` and `mm2-2`, and `api-1` and `api-2` behind the dashboard's nginx. There is no generator for this diagram: edit the HTML, then `src/scripts/diagrams/check.sh --export 08-demo-deployment`. Update both alt texts to match.
 
 - [ ] **Step 1: See both single points fail (RED).** On the current stack, from `src/deployment/`:
-  - `docker compose kill api`, then `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/overview`. Expected: 502. Then `docker compose start api`.
+  - `docker compose kill api`, then `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4000/api/overview`. Expected: 502. Then `docker compose start api`.
   - `docker compose kill mm2`, then run `docker compose exec central-kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic plant1.machine.readings` twice, 10 s apart. Expected: no partition grows. Then `docker compose start mm2`.
 - [ ] **Step 2: Write** the Compose, nginx, MirrorMaker 2 and drill changes.
 - [ ] **Step 3: Check the configuration.** `docker compose config --format json | python3 -c 'import json,sys; s=json.load(sys.stdin)["services"]; print([n for n,v in s.items() if "build" in v and v.get("restart") != "on-failure"])'`. Expected: `[]`. Then `docker compose up -d --build --wait --remove-orphans` and `docker compose exec dashboard nginx -t`. Expected: `syntax is ok` and `test is successful`.
 - [ ] **Step 4: Verify live (GREEN):**
-  - `docker compose kill api-1`; then, once a second for 15 s, `curl -fsS --max-time 2 -o /dev/null http://localhost:3000/api/overview`. Expected: every call succeeds. `docker compose start api-1`, and repeat with `api-2`.
+  - `docker compose kill api-1`; then, once a second for 15 s, `curl -fsS --max-time 2 -o /dev/null http://localhost:4000/api/overview`. Expected: every call succeeds. `docker compose start api-1`, and repeat with `api-2`.
   - `docker compose kill mm2-1`; 30 s and 40 s later, run the `kafka-get-offsets.sh` command above. Expected: every one of the 12 partitions grew between the two reads, because the dead worker's task moved to `mm2-2`; the dashboard's mirror lag is back under 2 s. Then `docker compose start mm2-1`.
   - `scripts/drill.sh central-down`, wait 60 s, `scripts/drill.sh central-up`, then `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps. Then `scripts/drill.sh resume`.
   - `docker stats --no-stream`. Expected: every container below its limit.

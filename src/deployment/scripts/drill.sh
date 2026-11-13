@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-API=http://localhost:3000/api
+API=http://localhost:4000/api
 PROOF_TIMEOUT=300 # seconds
 
 usage() {

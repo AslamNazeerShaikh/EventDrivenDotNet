@@ -293,9 +293,9 @@ for (n, ls), x in zip(tables, COLX):
 
 # ---------------------------------------------------------------- control room
 node(1456, 72, 320, 112, "service", "WEB", "desktop", "dashboard",
-     ["nginx:1.30-alpine-slim · :3000 · 64 MB", "React 19 · Vite 8 · TypeScript 7 · Tailwind 4",
+     ["nginx:1.30-alpine-slim · :4000 · 64 MB", "React 19 · Vite 8 · TypeScript 7 · Tailwind 4",
       "Recharts 3 · TanStack Query, polls every 1 s", "nginx proxies /api/* to api:8080",
-      "browser opens http://localhost:3000"], step=12)
+      "browser opens http://localhost:4000"], step=12)
 vline(1616, 184, 240, "HTTP /API", color=LINK, marker="arrow-link")
 node(1456, 240, 320, 1180 + D, "service", "API", "monitoring", "api · control-room API",
      ["EventDrivenDesign.Api · .NET 11", "ASP.NET Core minimal API · :8080", "256 MB · joins plant, central and ops"])

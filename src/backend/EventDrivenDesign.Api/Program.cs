@@ -73,6 +73,8 @@ builder.Services.AddSingleton(sp =>
     );
 });
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Pollers>());
+builder.Services.AddSingleton<ContainerPoller>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerPoller>());
 
 var app = builder.Build();
 app.UseGlobalExceptionHandling();
@@ -82,6 +84,9 @@ app.MapGet("/healthz", () => Results.Ok());
 app.MapGet("/api/overview", (Snapshot s) =>
     Results.Json(OverviewBuilder.Build(s, TimeProvider.System.GetUtcNow()), Json.Options)
 );
+
+// The latest container view held by ContainerPoller: no Docker call per request.
+app.MapGet("/api/containers", (ContainerPoller p) => Results.Json(p.Latest, Json.Options));
 
 app.MapGet(
     "/api/reconciliation",

@@ -554,12 +554,12 @@ def frontend():
         "  bun install --frozen-lockfile, bun run build",
         "  → dist/ (index.html + hashed assets)",
         "dashboard: nginx:1.30-alpine-slim",
-        "  serves dist/ · port 3000 → 80",
+        "  serves dist/ · port 4000 → 80",
         "  nginx/default.conf routes /api/ (right)",
     ]
     dev = [
         "vite.config.ts: plugins react(), tailwindcss()",
-        "  dev proxy /api → http://localhost:3000",
+        "  dev proxy /api → http://localhost:4000",
         "  (the running dashboard, then the APIs)",
         "format.test.ts: 47 bun tests of format.ts",
         "  pure functions only: no DOM, no network",

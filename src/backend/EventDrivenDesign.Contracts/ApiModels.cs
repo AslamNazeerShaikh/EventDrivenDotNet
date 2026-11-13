@@ -80,3 +80,42 @@ public sealed record AlarmView(
     DateTimeOffset StoredAt,
     double LatencySeconds
 );
+
+// The project's containers as the Docker Engine reports them, for the demo's container panel.
+// Available is false, with a short Reason, when the engine cannot be read; the other endpoints are unaffected.
+public sealed record ContainersView(
+    DateTimeOffset At,
+    bool Available,
+    string? Reason,
+    IReadOnlyList<ContainerView> Containers
+);
+
+// State is Docker's ("running", "exited"); Health is "healthy", "unhealthy", "starting" or null; Status is
+// Docker's text ("Up 5 minutes (healthy)"). TierOrder is the tier's place in the data flow, plant to control room.
+public sealed record ContainerView(
+    string Name,
+    string Service,
+    string Tier,
+    int TierOrder,
+    string State,
+    string? Health,
+    string Status,
+    string Image,
+    long? ImageBytes,
+    IReadOnlyList<ContainerPort> Ports,
+    double? CpuPercent,
+    long? MemoryUsedBytes,
+    long? MemoryLimitBytes,
+    long? NetRxBytes,
+    long? NetTxBytes,
+    long? BlockReadBytes,
+    long? BlockWriteBytes,
+    long? WritableBytes,
+    IReadOnlyList<ContainerVolume> Volumes,
+    DateTimeOffset? StartedAt
+);
+
+// Public is null when the port is not published on the host.
+public sealed record ContainerPort(int Private, int? Public, string Type);
+
+public sealed record ContainerVolume(string Name, string Destination, long? Bytes);
