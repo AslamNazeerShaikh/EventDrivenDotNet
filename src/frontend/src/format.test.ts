@@ -1,3 +1,14 @@
+/**
+ * Unit tests for `format.ts`, run by `bun test` (47 tests in this file).
+ *
+ * `format.ts` holds the pure logic of the dashboard, so these tests need no browser, no React and
+ * no API: they call each function with set inputs and compare the output. The current time is
+ * always passed in as `NOW`, never read from the clock. `src/scripts/build/test-frontend.sh`
+ * runs this file and then the strict build. The only import from `api.ts` is the `Reconciliation`
+ * type, which mirrors `Reconciliation` in `ApiModels.cs` (`EventDrivenDesign.Contracts`).
+ *
+ * @module
+ */
 import type { Reconciliation } from "./api";
 import { describe, expect, test } from "bun:test";
 import {
@@ -15,8 +26,10 @@ import {
   shouldRequestFull,
 } from "./format";
 
+/** The set "current time" for the tests: 2026-11-12T12:00:00Z, in epoch milliseconds. */
 const NOW = Date.parse("2026-11-12T12:00:00Z");
 
+// healthLabel: the text beside a health dot, including a down source that was never seen.
 describe("healthLabel", () => {
   test("healthy", () =>
     expect(healthLabel({ $type: "Healthy" }, NOW)).toBe("Healthy"));
@@ -37,6 +50,7 @@ describe("healthLabel", () => {
     ).toBe("Down, never seen"));
 });
 
+// agoText: "N s ago" and friends; the epoch means never, and a clock ahead is clamped to 0 s.
 describe("agoText", () => {
   test("epoch is never", () =>
     expect(agoText("1970-01-01T00:00:00Z", NOW)).toBe("never"));
@@ -48,12 +62,14 @@ describe("agoText", () => {
     expect(agoText("2026-11-12T12:00:02Z", NOW)).toBe("0 s ago"));
 });
 
+// instanceLabel: the last part of a gateway id; null is a dash.
 describe("instanceLabel", () => {
   test("strips the gateway- and the shop", () =>
     expect(instanceLabel("gateway-bdy-b")).toBe("b"));
   test("null is a dash", () => expect(instanceLabel(null)).toBe("—"));
 });
 
+// isStale: only a Down tile is treated as history.
 describe("isStale", () => {
   test("only Down is stale", () => {
     expect(isStale({ $type: "Down", lastSeen: "2026-11-12T11:59:30Z" })).toBe(
@@ -64,12 +80,14 @@ describe("isStale", () => {
   });
 });
 
+// formatSeconds: one decimal, a dash for null, negatives clamped to 0.
 describe("formatSeconds", () => {
   test("null is a dash", () => expect(formatSeconds(null)).toBe("—"));
   test("one decimal", () => expect(formatSeconds(0.84)).toBe("0.8 s"));
   test("negative is clamped", () => expect(formatSeconds(-0.2)).toBe("0.0 s"));
 });
 
+// formatEta: seconds under a minute, then "M min SS s".
 describe("formatEta", () => {
   test("null is a dash", () => expect(formatEta(null)).toBe("—"));
   test("under a minute", () => expect(formatEta(42.4)).toBe("42 s"));
@@ -77,6 +95,7 @@ describe("formatEta", () => {
   test("zero", () => expect(formatEta(0)).toBe("0 s"));
 });
 
+// formatInt: rounded, with comma separators.
 describe("formatInt", () => {
   test("thousands separators", () =>
     expect(formatInt(1204500)).toBe("1,204,500"));
@@ -84,9 +103,19 @@ describe("formatInt", () => {
   test("rounds", () => expect(formatInt(499.6)).toBe("500"));
 });
 
+// fillBuckets: the chart window is filled with 5-second buckets; empty ones are zero, and
+// synthesised ones are provisional only after the watermark.
 describe("fillBuckets", () => {
+  /** End of the window: the same instant as `NOW`, in epoch milliseconds. */
   const end = Date.parse("2026-11-12T12:00:00Z");
+  /**
+   * The ISO-8601 UTC string for the moment `s` seconds before `end`.
+   *
+   * @param s - Seconds before the end of the window.
+   * @returns For example `iso(30)` is `"2026-11-12T11:59:30.000Z"`.
+   */
   const iso = (s: number) => new Date(end - s * 1000).toISOString();
+  /** A watermark 20 seconds before the end: buckets older than this are settled. */
   const watermark = iso(20);
 
   test("covers the whole window in 5 s steps, oldest first", () => {
@@ -131,6 +160,7 @@ describe("fillBuckets", () => {
   });
 });
 
+// mirrorHealth: no data and lag over 10 s are Degraded; 10 s exactly and negative lag are Healthy.
 describe("mirrorHealth", () => {
   test("no data is degraded", () =>
     expect(mirrorHealth(null)).toEqual({
@@ -150,7 +180,9 @@ describe("mirrorHealth", () => {
     expect(mirrorHealth(-0.4)).toEqual({ $type: "Healthy" }));
 });
 
+// shouldRequestFull: only when paused and drained, and at most once per 10 s.
 describe("shouldRequestFull", () => {
+  /** A light reconciliation that is paused and drained, the only state that allows a scan. */
   const settled = { paused: true, drained: true };
   test("never before the light response arrives", () =>
     expect(shouldRequestFull(undefined, null, NOW)).toBe(false));
@@ -170,7 +202,14 @@ describe("shouldRequestFull", () => {
     expect(shouldRequestFull(settled, NOW - 10_000, NOW)).toBe(true));
 });
 
+// proofView: the verdict is always the live poll's; duplicate rows come from the full check only while it applies.
 describe("proofView", () => {
+  /**
+   * Builds a paused, drained, PASS reconciliation with no machines, with some fields overridden.
+   *
+   * @param o - The fields to change.
+   * @returns A complete `Reconciliation`. `duplicateRows` is `null` unless overridden.
+   */
   const rec = (o: Partial<Reconciliation>): Reconciliation => ({
     generated: 10,
     stored: 10,
@@ -184,6 +223,13 @@ describe("proofView", () => {
     machines: [],
     ...o,
   });
+  /**
+   * Builds a full-check result: a reconciliation with 0 duplicate rows plus the time it arrived.
+   *
+   * @param o - The fields of the reconciliation to change.
+   * @param at - Epoch milliseconds when the result arrived. Defaults to 4 s before `NOW`.
+   * @returns An object shaped like `useFullCheck`'s `result`.
+   */
   const full = (o: Partial<Reconciliation>, at = NOW - 4_000) => ({
     data: rec({ duplicateRows: 0, ...o }),
     at,
@@ -233,6 +279,7 @@ describe("proofView", () => {
     ).toBe("FAIL"));
 });
 
+// panelNote: no note without an error; the wording depends on whether old data exists and on the reason.
 describe("panelNote", () => {
   test("no error, no note", () =>
     expect(panelNote(false, true, "x")).toBeUndefined());

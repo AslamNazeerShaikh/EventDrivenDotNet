@@ -1,5 +1,22 @@
+/*
+ * index.css: global styles for the dashboard.
+ *
+ * Imported once, by main.tsx. It does three things:
+ *   1. loads Tailwind, which generates the utility classes used in the .tsx files;
+ *   2. defines the colour theme as Tailwind tokens (ink, panel, line, muted);
+ *   3. sets the page background, text colour and font, and a clear keyboard focus ring.
+ * Everything else is styled with Tailwind classes in the components.
+ */
 @import "tailwindcss";
 
+/*
+ * Theme tokens. Tailwind turns each --color-* name into utilities, so --color-panel is used as
+ * bg-panel, border-panel and so on, and --color-muted as text-muted.
+ *   ink   : page background, and the background of inset boxes and inputs
+ *   panel : background of a panel card
+ *   line  : borders and dividers
+ *   muted : secondary text, such as headings and labels
+ */
 @theme {
   --color-ink: #0b1220;
   --color-panel: #121a2b;
@@ -7,6 +24,7 @@
   --color-muted: #9fb0cc;
 }
 
+/* Page-wide base: dark background, light text, and the system font stack. */
 body {
   background: var(--color-ink);
   color: #e8eefb;
@@ -19,6 +37,7 @@ body {
     sans-serif;
 }
 
+/* A light-blue ring on the controls when reached by keyboard, so focus is always easy to see. */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
