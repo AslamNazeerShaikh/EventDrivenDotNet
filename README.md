@@ -6,7 +6,7 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 
 ![The control-room dashboard, full page: header, KPI strip, pipeline, all 21 containers with CPU, memory, disk and ports, buffers, readings chart, live throughput, proof, gateways, Kafka and database, alarms and alarm mix](docs/screenshots/dashboard.png)
 
-The control room at <http://localhost:4000>, captured live at 1920 px with `bun src/scripts/live/capture-dashboard.ts`.
+The control room at <http://localhost:4000>, captured live at 2560 px wide (a full-screen browser on a 2560×1440 display) with `bun src/scripts/live/capture-dashboard.ts`.
 
 | # | Document | What it holds |
 | --- | --- | --- |

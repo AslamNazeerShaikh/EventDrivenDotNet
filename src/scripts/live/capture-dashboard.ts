@@ -12,7 +12,7 @@
  * Env:
  *   DASHBOARD_URL  default http://localhost:4000
  *   SHOT_OUT       default docs/screenshots/dashboard.png
- *   SHOT_WIDTH     viewport width in CSS px, default 1920
+ *   SHOT_WIDTH     viewport width in CSS px, default 2560 (a full-screen browser on a 2560x1440 display)
  *   SHOT_SETTLE_MS wait after load so every 1 s poll has data, default 8000
  *   PLAYWRIGHT_BROWSERS_PATH  default ~/Library/Caches/ms-playwright (macOS), ~/.cache/ms-playwright (Linux)
  *
@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 
 const URL = process.env["DASHBOARD_URL"] ?? "http://localhost:4000";
 const OUT = process.env["SHOT_OUT"] ?? "docs/screenshots/dashboard.png";
-const WIDTH = Number(process.env["SHOT_WIDTH"] ?? 1920);
+const WIDTH = Number(process.env["SHOT_WIDTH"] ?? 2560);
 const SETTLE_MS = Number(process.env["SHOT_SETTLE_MS"] ?? 8000);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
