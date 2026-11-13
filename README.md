@@ -11,6 +11,7 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 | 3 | [`docs/02-solution-design.md`](docs/02-solution-design.md) | The solution design: architecture, the twelve aspects, sizing, trade-offs |
 | 4 | [`docs/03-implementation-plan.md`](docs/03-implementation-plan.md) | The task-by-task build plan |
 | 5 | [`docs/04-build-progress.md`](docs/04-build-progress.md) | What is built, what is left, and the test counts |
+| 6 | [`docs/05-run-and-operate.md`](docs/05-run-and-operate.md) | **How to build, start, stop, test and present the demo**, where to see each piece of data, manual tests, troubleshooting, and the dashboard panel by panel |
 
 ## Run the demo
 
