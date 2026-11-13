@@ -267,7 +267,7 @@ Two smaller limits remain, both inside the design rather than accidents. An alar
 
 After a plant-cluster outage the lease stays where it was: the broker restarts each static member's 6 s session when it reloads the group, and the lease consumer reconnects within 1 s (`reconnect.backoff.max.ms`), so the active instance rejoins first and sends its outage backlog. If it cannot reconnect within the 6 s, the lease moves and the stranded-backlog case above applies.
 
-The demo's pause is a control, not part of the design, and each instance keeps it on its own disk. If the active instance dies while the plant runs and the operator pauses before the standby takes over, the standby starts paused and does not backfill the seconds in between. Production has no pause: the backfill always runs to the present.
+The demo's pause is a control, not part of the design, and each instance keeps it on its own disk. If the active instance dies while the plant runs and the operator pauses before the standby takes over, the standby starts paused and does not backfill the seconds in between. Two smaller cases follow from the same per-disk pause. A disk rebuilt while the plant is paused starts unpaused, until the proof's pause, re-sent every 2 s, reaches it. A standby that was down during a resume keeps its pause, and if it takes over, the shop's tile shows Paused until the next resume. Production has no pause: the backfill always runs to the present.
 
 The demo proves the gateway failover with `drill.sh failover BDY` ([doc 00 §10](00-edd-demo-game-plan.md#10-failure-drills)): it kills the Body shop's active gateway, the standby takes over within 15 s, and the proof still shows PASS with 0 gaps.
 

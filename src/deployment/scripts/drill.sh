@@ -115,6 +115,8 @@ failover() { # $1 SHOP (any case) — drill 9: kill the active instance; the sta
   done
   [[ ${inst:-} == "$other" && ${type:-} == Healthy ]] || { echo "failover: $other did not take over within 30 s" >&2; return 4; }
 
+  # The standby check below reads /metrics with busybox (a Docker Official Image); pull it now, not inside the deadline.
+  docker image inspect busybox > /dev/null 2>&1 || docker pull -q busybox > /dev/null
   echo "▶ starting $instance"
   run docker compose start "$instance"
   deadline=$((SECONDS + 30)); n=0
