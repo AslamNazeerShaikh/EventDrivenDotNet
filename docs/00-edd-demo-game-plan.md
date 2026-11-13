@@ -191,13 +191,13 @@ PostgreSQL 18 keeps its data under a version-specific directory, so mount the vo
 
 | # | Topic | Cluster | Partitions | Retention (demo) | Written by | Read by |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `machine.readings` | plant | 12 | 3 h | Gateways | MirrorMaker 2, API (plant tail) |
-| 2 | `machine.alarms` | plant | 3 | 3 h | Gateways | MirrorMaker 2, API (plant alarms view) |
-| 3 | `plant1.machine.readings` | central | 12 | 3 h (copied from the source by MirrorMaker 2) | MirrorMaker 2 | Consumers (group `central-readings`), API (central tail) |
-| 4 | `plant1.machine.alarms` | central | 3 | 3 h | MirrorMaker 2 | Consumers (group `central-alarms`) |
+| 1 | `machine.readings` | plant | 12 | 8 h | Gateways | MirrorMaker 2, API (plant tail) |
+| 2 | `machine.alarms` | plant | 3 | Kept for good | Gateways | MirrorMaker 2, API (plant alarms view) |
+| 3 | `plant1.machine.readings` | central | 12 | 8 h (MirrorMaker 2 copies the source's setting within 10 min) | MirrorMaker 2 | Consumers (group `central-readings`), API (central tail) |
+| 4 | `plant1.machine.alarms` | central | 3 | Kept for good (copied from the source) | MirrorMaker 2 | Consumers (group `central-alarms`) |
 | 5 | `gateway.lease.<shop>` (`prs`, `bdy`, `pnt`, `mch`, `asm`; R3) | plant | 1 | 3 h | Nobody: it holds no data | The shop's gateway pair (group `gateway-lease-<shop>`): the member assigned its one partition is active |
 
-`plant-topics` creates topics 1, 2 and 5 with `--if-not-exists`. MirrorMaker 2 creates topics 3 and 4 and its own internal topics on the central cluster. Three hours of retention covers the longest drill many times over: 500 records/s × about 250 B is about 450 MB per hour.
+`plant-topics` creates topics 1, 2 and 5 with `--if-not-exists`. MirrorMaker 2 creates topics 3 and 4 and its own internal topics on the central cluster. Eight hours of readings cover the exercise's 6-hour central outage: 500 records/s × about 250 B is about 450 MB per hour, so about 3.6 GB. Alarms are kept for good (a few KB per hour), so a gateway rebuilding its alarm counter from the log always finds each machine's newest alarm. `plant-topics` also re-applies both settings to topics an older version created.
 
 Record headers follow CloudEvents binary mode (doc 02 §3). The gateway builds the headers at send time from the buffer row, so they are never stored:
 
