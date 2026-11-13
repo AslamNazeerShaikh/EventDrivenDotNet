@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 16:40 IST: doc 05 gains the storage analysis (sizes, growth, how to free space, never delete only database rows). Stack running for local testing.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 16:55 IST: doc 05 gains 'Alarms in detail' (machine catalog, the 7 alarm kinds with signal limits and severity, where alarms come from, what Inject alarm does step by step, the rules, examples, where to see them).
 
 ## 1. Where things are
 

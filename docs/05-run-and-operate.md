@@ -12,7 +12,7 @@ How to build, start, stop, test and present the plant demo, where to look at eve
 6. [Where to see which data](#6-where-to-see-which-data)
 7. [Manual tests](#7-manual-tests)
 8. [Operating the demo](#8-operating-the-demo)
-9. [The dashboard, panel by panel](#9-the-dashboard-panel-by-panel)
+9. [The dashboard, panel by panel](#9-the-dashboard-panel-by-panel), including [alarms in detail](#alarms-in-detail): types, machines, and what **Inject alarm** does
 10. [Troubleshooting](#10-troubleshooting)
 
 ## 1. What you need
@@ -41,7 +41,7 @@ Docker Compose project `edd` (`src/deployment/compose.yaml`) runs 21 containers 
 | 8 | `api-1`, `api-2` | Control-room API | none (reached through the dashboard) |
 | 9 | `dashboard` | nginx: serves the dashboard and proxies `/api/` to both APIs | **3000** |
 
-Machines are simulated inside the gateways: 500 machines, 100 per shop, one reading per machine per second. Machine IDs look like `P1-<SHOP>-<letter><nnn>`, for example `P1-BDY-W042` (a weld robot in Body) or `P1-MCH-C017` (a CNC machine in Machining). The shops are `PRS` (press), `BDY` (body), `PNT` (paint), `MCH` (machining) and `ASM` (assembly).
+Machines are simulated inside the gateways: 500 machines, 100 per shop, one reading per machine per second. Machine IDs look like `P1-<SHOP>-<letter><nnn>` (every range is in section 9, "Alarms in detail"), for example `P1-BDY-W042` (a weld robot in Body) or `P1-MCH-C017` (a CNC machine in Machining). The shops are `PRS` (press), `BDY` (body), `PNT` (paint), `MCH` (machining) and `ASM` (assembly).
 
 ## 3. Build and test the code
 
@@ -302,6 +302,95 @@ Afterwards: `scripts/drill.sh resume`.
 | 4 | **Proof** | Generated, Stored, Missing, Gaps, Duplicate rows, Duplicates absorbed, and the verdict | **PASS**: every generated reading is stored once. **WAIT**: not settled yet, so pause the plant and let every buffer and lag drain. **FAIL**: a reading is missing, out of sequence or duplicated. Duplicate rows comes from a full scan, run on the **Check duplicates** button and automatically at most every 10 s once paused and drained; it shows "Checking duplicates…" while running. Duplicates absorbed counts redeliveries the key rejected. **Per-machine table** expands all 500 machines |
 | 5 | **Alarms** | The latest alarms stored at central: time, machine, kind, severity, latency | Latency is the delay from the machine to central (0.0 s in steady state; higher during a drain). Below: **Machine id** + **Kind** + **Inject alarm** (kinds: Overheat, Vibration, Overload, EStop, LowBattery, OutOfBand), and **Pause** / **Resume** for all gateways. `Plant: running` or `paused` |
 
+### Alarms in detail
+
+An alarm is the plant reporting that a machine signal crossed its safety limit: too hot, too much vibration, an emergency stop. Alarms travel on their own Kafka topic, `machine.alarms`, separate from the 500 readings per second. They have their own consumer group at central, `central-alarms`, and the gateway always sends them before readings. So an alarm never waits behind a backlog of readings.
+
+#### The machines
+
+Machine IDs are `P1-<SHOP>-<letter><nnn>`. The letter gives the machine type, and the type decides which alarms it can raise.
+
+| # | Shop | Machines (ID range) | Total |
+| --- | --- | --- | --- |
+| 1 | `PRS`, press | Stamping presses `S001`–`S030`, conveyors `V001`–`V050`, AGVs `A001`–`A020` | 100 |
+| 2 | `BDY`, body | Weld robots `W001`–`W080`, conveyors `V001`–`V010`, AGVs `A001`–`A010` | 100 |
+| 3 | `PNT`, paint | Paint booths `B001`–`B040`, conveyors `V001`–`V050`, AGVs `A001`–`A010` | 100 |
+| 4 | `MCH`, machining | CNC machines `C001`–`C070`, conveyors `V001`–`V020`, AGVs `A001`–`A010` | 100 |
+| 5 | `ASM`, assembly | Conveyors `V001`–`V060`, AGVs `A001`–`A040` | 100 |
+
+#### The alarm kinds
+
+Severities: `critical` for Overheat and EStop, `high` for Overload, and `warning` for the rest.
+
+| # | Kind | Fires when | Machine type (letter) and signal limit | Severity |
+| --- | --- | --- | --- | --- |
+| 1 | **Overheat** | A temperature goes above its limit | Stamping press (S): `die_temp_c` > 80 °C · Weld robot (W): `motor_temp_c` > 85 °C | critical |
+| 2 | **EStop** | The emergency stop is pressed | AGV (A): `e_stop` > 0.5 (pressed) | critical |
+| 3 | **Overload** | A load goes above its limit | Stamping press (S): `tonnage_t` > 900 t · CNC (C): `load_pct` > 95% · Conveyor (V): `motor_current_a` > 25 A | high |
+| 4 | **Vibration** | Vibration goes above its limit | CNC (C) and conveyor (V): `vibration_mm_s` > 4.5 mm/s | warning |
+| 5 | **OutOfBand** | A value leaves its allowed band | Weld robot (W): `weld_current_ka` outside 7–16 kA · Paint booth (B): `air_temp_c` outside 20–25 °C, `humidity_pct` outside 35–65% | warning |
+| 6 | **LowBattery** | The battery runs low | AGV (A): `battery_pct` < 15% | warning |
+| 7 | **DataGap** | Not a sensor alarm: a gateway was down longer than its 10-minute history, so it records the seconds it cannot recover, once per machine | any | warning |
+
+#### Where alarms come from
+
+Normal readings wander inside each signal's normal range (for example `vibration_mm_s` between 0.5 and 2.8), which is always inside the alarm limits. **So an alarm happens only when a fault is injected**:
+
+| # | Source | How often | Details |
+| --- | --- | --- | --- |
+| 1 | Random faults | About 0.5 per minute per shop, about 2.5 per minute for the plant | Each active gateway, on each one-second tick, injects a fault with probability 0.5/60 (`Gateway__FaultsPerMinute` in `compose.yaml`). It picks a random machine of its shop and a random alarm kind of that machine's type. Each machine therefore alarms about once every 200 minutes |
+| 2 | The **Inject alarm** button | On demand | Section below |
+| 3 | `api.sh fault <MACHINE> <KIND>` | On demand | The same request as the button, from the terminal |
+| 4 | A long gateway outage | Once per outage | One `DataGap` per machine for the seconds beyond the 10-minute history |
+
+#### What happens when you press "Inject alarm"
+
+| # | Step | Where in the code |
+| --- | --- | --- |
+| 1 | The dashboard sends `POST /api/machines/P1-MCH-C017/faults` with `{"kind": "Vibration"}` | `useInjectFault` in `src/frontend/src/api.ts` |
+| 2 | The API reads the shop from the ID (`MCH`) and finds that shop's **active** gateway | `ApiRoutes.GatewayFor` |
+| 3 | It forwards `POST /control` with an `InjectFault` command to that gateway | API `Program.cs` |
+| 4 | The gateway hands the fault to that machine's simulator | `GatewayControl.ApplyAsync` → `Collector.InjectFault` → `MachineSimulator.InjectFault` |
+| 5 | The simulator sets the matching signal just past its limit and **holds it for 10 seconds**. The margin is 10% of the signal's normal range, at least 0.5: for example, `vibration_mm_s` of `P1-MCH-C017` goes to 4.5 + 0.5 = 5.0. The readings of those 10 s carry the faulty value, as a real failing machine would send | `MachineSimulator.Next` |
+| 6 | On the first faulty second, the gateway raises **one** alarm. It carries the next `alarm_seq` for that machine, the `reading_seq` that triggered it, the signal, the value and the limit | `MachineSimulator.Next`, `Collector.Tick` |
+| 7 | The alarm is written to the gateway's SQLite buffer, in the alarm lane, together with that second's readings | `GatewayBuffer.WriteTickAsync` |
+| 8 | The sender sends the alarm lane first, to `machine.alarms` | `Sender.RunAsync`, `GatewayBuffer.ReadOldest` (ordered by lane) |
+| 9 | MirrorMaker 2 copies it to central (`plant1.machine.alarms`); the `central-alarms` store writer inserts it into PostgreSQL `alarms`, keyed by `(machine_id, alarm_seq)` | `BatchLoop<MachineAlarm>`, `CentralStore.InsertAlarmsAsync` |
+| 10 | It appears in the Alarms panel, normally within 1–2 seconds. **Latency** = when it was stored at central − the machine's time | `CentralQueries.RecentAlarmsAsync` |
+
+#### Rules you will notice
+
+| # | You do | You get | Why |
+| --- | --- | --- | --- |
+| 1 | Press **Inject alarm** again for the same machine and kind within the 10 s | Nothing new: no second alarm, no restart of the fault | A command sent twice is harmless (doc 02 §4.6, hop 2) |
+| 2 | Pick a kind the machine does not have, such as Vibration on `P1-BDY-W042` | An error: "Vibration does not apply to P1-BDY-W042." | Each machine type has its own signals (table above) |
+| 3 | Type a machine that does not exist, such as `P1-BDY-W999` | A not-found error | The gateway knows only its shop's 100 machines |
+| 4 | Type a malformed ID, such as `BDY42` | An error explaining the format `<plant>-<shop>-<machine>` | The API checks the ID before forwarding it |
+| 5 | Inject while central is down | The alarm waits in the gateway buffer and plant Kafka, then arrives as soon as central is back, ahead of the reading backlog | Alarms have their own lane, topic and consumer group |
+| 6 | Inject right after `central-up` | It can take about 40 s, because the store writers resume about 45 s after `central-up` | Inject once the drain ETA counts down, and it lands within seconds |
+| 7 | Inject while the plant is paused | No alarm until you resume: a paused machine produces nothing | Pause stops the simulated machines |
+
+#### Combinations to try
+
+| # | Machine | Kinds that work |
+| --- | --- | --- |
+| 1 | `P1-MCH-C017` (CNC) | Vibration, Overload |
+| 2 | `P1-BDY-W042` (weld robot) | Overheat, OutOfBand |
+| 3 | `P1-PRS-S005` (stamping press) | Overload, Overheat |
+| 4 | `P1-PNT-B012` (paint booth) | OutOfBand |
+| 5 | `P1-ASM-A010` (AGV) | EStop, LowBattery |
+| 6 | `P1-ASM-V001` (conveyor) | Overload, Vibration |
+
+#### Where to see alarms
+
+| # | Where | Command |
+| --- | --- | --- |
+| 1 | Dashboard | Alarms panel: the latest alarms stored at central |
+| 2 | Terminal | `src/scripts/live/api.sh alarms` |
+| 3 | PostgreSQL | `SELECT machine_id, alarm_seq, reading_seq, kind, severity, signal, value, threshold, device_time FROM alarms ORDER BY device_time DESC LIMIT 10;` |
+| 4 | Plant Kafka, with CloudEvents headers | the `kafka-console-consumer.sh` command in section 6, topic `machine.alarms` |
+| 5 | Waiting in a gateway | `bufferedAlarms` in its `/metrics` (section 6); lane 0 in its SQLite `outbox` |
+
 ## 10. Troubleshooting
 
 | # | Symptom | Cause | Fix |
@@ -318,3 +407,4 @@ Afterwards: `scripts/drill.sh resume`.
 | 10 | Port 3000 in use | Another program holds it | Stop that program, or change `3000:80` in `compose.yaml` |
 | 11 | The database looks overloaded | Usually only big: about 0.5 GB and 1.8 M rows per hour | `docker stats --no-stream edd-central-db-1` (a few % CPU is normal) and the consumer lag in `api.sh overview`. See "Storage" in section 4 |
 | 12 | Docker disk filling up | The build cache (about 21 GB reclaimable) and data volumes growing | `docker system df`; `docker builder prune` frees the cache safely. Never delete only database rows (section 4) |
+| 13 | **Inject alarm** shows an error or nothing appears | The kind does not fit the machine type, the ID is wrong, the plant is paused, or central has just come back | See "Alarms in detail" (section 9), rules 2–7; for example Vibration works on `P1-MCH-C017`, not on `P1-BDY-W042` |
