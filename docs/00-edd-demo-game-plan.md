@@ -105,7 +105,7 @@ Versions were checked on 12 November 2026. Pin them exactly.
 | 2 | `mcr.microsoft.com/dotnet/aspnet:11.0` | Verified Publisher (Microsoft) | Gateway, consumer and API runtimes (Ubuntu 26.04 base) |
 | 3 | `postgres:18.6-alpine` | Docker Official Image | `central-db` |
 | 4 | `nginx:1.30-alpine-slim` | Docker Official Image | `dashboard` |
-| 5 | `apache/kafka:4.4.0` | Sponsored OSS, published by the Apache Kafka project | `plant-kafka`, `central-kafka`, `mm2`, `plant-topics` |
+| 5 | `apache/kafka:4.4.0` | Sponsored OSS, published by the Apache Kafka project | `plant-kafka`, `central-kafka`, `mm2-1`, `mm2-2`, `plant-topics` |
 | 6 | `oven/bun:1.4.4-alpine` | No badge; published by Oven, Bun's maker | Frontend build stage only; never shipped |
 | 7 | `mcr.microsoft.com/playwright/dotnet:v1.64.1-noble` | Verified Publisher (Microsoft) | Optional CI runner for end-to-end tests. The tag must match the package version |
 
@@ -716,9 +716,10 @@ About 12 minutes, told as one story: break the central site, watch the plant car
 2. **Steady state.** Open `:3000`. Everything is green, 500 readings per second, freshness about 1 s.
 3. **Central down.** Run `drill.sh central-down` and wait 2 minutes. The plant keeps writing, plant alarms stay live, and about 60,000 readings build up in the plant cluster.
 4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds. About 45 s later the store writers resume, and the database drains as its ETA counts down, in about as long as the outage lasted (2 minutes 15 seconds for a 2.5-minute outage in the rehearsal). The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
-5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts, its sequences continue, and its missed seconds are backfilled. Say up front that duplicates absorbed rises only if the kill lands between an acknowledgement and a delete; the central-down drill has already shown the counter working.
-6. **The proof.** Run `drill.sh proof`. Generated = stored for every machine, 0 gaps, 0 duplicate rows, and N duplicates absorbed: PASS.
-7. **Optional.** Run the WAN cut, plant broker and consumer crash drills.
+5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts from its disk inside the 6 s session, keeps the lease, its sequences continue, and its missed seconds are backfilled. Say up front that duplicates absorbed rises only if the kill lands between an acknowledgement and a delete; the central-down drill has already shown the counter working.
+6. **Fail over a gateway.** Run `drill.sh failover BDY`. The active instance is killed, the standby takes the lease within about 15 s (the script prints the seconds), and the BDY tile switches to it. The killed instance comes back as the standby, with no second switch.
+7. **The proof.** Run `drill.sh proof`. Generated = stored for every machine, 0 gaps, `over` 0, 0 duplicate rows, and N duplicates absorbed: PASS.
+8. **Optional.** Run the disk-loss, WAN cut, plant broker and consumer crash drills.
 
 Talking points to have ready:
 

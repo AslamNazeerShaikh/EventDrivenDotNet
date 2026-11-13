@@ -88,7 +88,7 @@ Why the hybrid wins:
 
 ## 3. Architecture
 
-![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five active/standby gateway pairs (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, a control-room API and dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
+![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five active/standby gateway pairs (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, two control-room APIs and a dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
 
 *Source: [01-plant-to-central.html](diagrams/01-plant-to-central.html)*
 
@@ -112,6 +112,7 @@ Why the hybrid wins:
 | 2 | `machine.alarms` | Plant | 3 | `machine_id` | 7 days | Threshold breaches and emergency stops |
 | 3 | `plant1.machine.readings` | Central | 12 (mirrored) | `machine_id` | 3 days | MirrorMaker 2 copy of topic 1 |
 | 4 | `plant1.machine.alarms` | Central | 3 (mirrored) | `machine_id` | 3 days | MirrorMaker 2 copy of topic 2 |
+| 5 | `gateway.lease.<shop>` | Plant | 1 | none | none | Never written to; its one partition is the active/standby lease of a shop's gateway pair (§4.3) |
 
 MirrorMaker 2's default replication policy adds the source cluster's alias as a prefix (`plant1.`). The prefix is kept on purpose: it is how several plants share one central cluster without name clashes.
 

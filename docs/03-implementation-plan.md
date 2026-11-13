@@ -914,8 +914,8 @@ Needs R1 and R2. Doc 02 §4.3 ("Fault tolerance and zero downtime") and §4.10 r
 - [ ] **Step 7: Redraw diagram 01.** Edit the generator, run `python3 src/scripts/diagrams/gen01_plant_to_central.py`, then `src/scripts/diagrams/check.sh --export 01-plant-to-central`. Expected: both checks pass and the SVG is written. Update the diagram's alt text in doc 02 §3 to say five active/standby gateway pairs.
 - [ ] **Step 8: Verify live.** From `src/deployment/`:
   - `docker compose up -d --build --wait --remove-orphans`, then remove the old volumes: `docker volume rm edd_gateway-prs-data edd_gateway-bdy-data edd_gateway-pnt-data edd_gateway-mch-data edd_gateway-asm-data`.
-  - `curl -fsS http://localhost:3000/api/overview`. Expected: five gateway tiles `Healthy`, each with instance `gateway-<shop>-a`; a live rate of about 500, because standbys send nothing.
-  - `scripts/drill.sh failover BDY`. Expected: `gateway-bdy-b took over after N s`, with N ≤ 15; the script waits until `gateway-bdy-a` is back in `/api/overview` as a `Healthy` standby (cooperative-sticky keeps `-b` the owner, so there is no second switch).
+  - `curl -fsS http://localhost:3000/api/overview`. Expected: five gateway tiles `Healthy`, each naming its active instance, `gateway-<shop>-a` or `-b` (cooperative-sticky keeps join order, so either can win at start); a live rate of about 500, because standbys send nothing.
+  - `scripts/drill.sh failover BDY`. Expected (when `-a` is active; the script names whichever instance takes over): `gateway-bdy-b took over after N s`, with N ≤ 15; the script waits until `gateway-bdy-a` is back in `/api/overview` as a `Healthy` standby (cooperative-sticky keeps `-b` the owner, so there is no second switch).
   - `scripts/drill.sh proof`. Expected: PASS, 0 missing, 0 gaps; the pause is re-sent on every poll, so the restarted `-a` is paused too. Then `scripts/drill.sh resume`.
   - `docker stats --no-stream`. Expected: every container below its limit.
 - [ ] **Step 9: Commit.** `git commit -m "feat(gateway): run active/standby gateway pairs with a Kafka lease"`

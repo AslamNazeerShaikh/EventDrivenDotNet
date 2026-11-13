@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 01:45 IST: STOP POINT (usage limit). Core demo complete and rehearsed; R1–R4 designed but the review fixes are not applied yet.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 13:05 IST: Claude took over from opencode. R1–R4 merged into feat/plant-demo (fast-forward to `afb9bd9`); pre-demo hardening (H1) in progress.
 
 ## 1. Where things are
 
@@ -48,9 +48,14 @@ Execution order: 1, 2, 3, 4, 6, 5, 7, **7b**, 8, 9, 10, 11, 12, 13, 14, 15, 16, 
 | 13b | Fix: the proof verdict flickers PASS/WAIT once paused and drained (found live in Task 15) | Done (root cause: the proof compared the DB sample with the latest offsets poll; now with the start of the stable run. Live: 60/60 PASS, WAIT 0.6 s after Resume) | `bbb47ca` | Clean |
 | 15 | `drill.sh` | Done (live: central down 60 s → up → PASS 914,200 = 914,200, 0/0/0, 117,742 duplicates absorbed; crash drills → PASS) | `f3e0975` | Clean |
 | 16 | Cold-start rehearsal, README | Done. Rehearsal PASS 184,700 = 184,700, 12,502 duplicates absorbed, cold start 12 s; README run section | `e8a272e`, `9289603` | Clean after 1 fix round |
-| R1–R4 | Resilience tier (section 5) | Designed in docs 00/02/03 (`d175d4d`), but the spec review found 2 critical flaws (`resilience-spec-review.md`). **The docs fix round was stopped before any edit (usage limit): do not build from doc 03 R1–R4 until it is applied.** Nothing is built | `d175d4d` | Ready after fixes; fixes NOT applied |
+| Rfix | Resilience docs fix round (spec review findings 1–7, rulings 13–14) | Done (opencode) | `cad43ae` | Clean after re-review (muse-spark) |
+| R1 build | Reconcile buffer state from the plant log | Done (opencode). Live drill 8 PASS before R3 | `8236c6f` | Clean, 4 minors parked (muse-spark) |
+| R2 build | Backfill missed seconds from machine history; DataGap beyond 600 s | Done (opencode) | `5d1aa1f` | Clean, 5 minors parked (muse-spark) |
+| R3 build | Active/standby gateway pairs on a Kafka lease: 10 gateways, fencing, standby reconcile, proof `Over` → FAIL | Done (opencode). Isolated-stack failover verified | `12edadc` | Clean, 11 minors parked (deepseek); Opus re-review running |
+| R4 build | Two APIs behind nginx, two MirrorMaker 2 workers, `restart: on-failure`, diagram 08 | Done (opencode). Kill-API, kill-MM2, central-down proof PASS 3,561,600 = 3,561,600 | `afb9bd9` | Clean, 6 minors parked (deepseek); final review (deepseek): merge-ready with conditions |
+| H1 | Pre-demo hardening: R1–R4 fast-forwarded into `feat/plant-demo`; README and doc 00 §14 for pairs and failover; duplicate-row scan gets 30 s; `drill.sh proof` prints `over` and tolerates a starting instance; full drill rehearsal on the 21-container stack | **In progress** (Claude) | — | — |
 
-Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 frontend (`bun test`) tests passing, 0 warnings. The flaky sender test is fixed (its fake-clock advance could land before the backoff timer existed; it now advances until the retry starts).
+Tests on the branch: 170 unit (3 runs green), 19 integration and 47 frontend (`bun test`) tests passing, 0 warnings, C# formatted.
 
 ## 4. Rulings so far
 
@@ -70,8 +75,12 @@ Tests on the branch: Tests on the branch: 146 unit, 13 integration and 45 fronte
 | 12 | Task 14b re-scoped: long-running pages already keep their last data; fix only the false "last data" note on a page opened during an outage | The rehearsal screenshot was a fresh page load |
 | 13 | Resilience fix round: fence the lease (any assignment after a lost session reconciles first), drain the sender on revocation, `drained` needs every gateway buffer empty, standbys reconcile every 10 s | The spec review found two writers after a one-sided session loss and a simulator that cannot replay a seq |
 | 14 | Lease assignor `cooperative-sticky`: the current owner keeps the lease, a repaired gateway rejoins as the standby | Matches doc 02 §4.10 row 6; one takeover per failover instead of two |
+| 15 | Opencode's stacked branches (`feat/plant-demo-rfix-docs`, `-r1` … `-r4`, one commit each, linear on `8b94fc0`) are fast-forwarded into `feat/plant-demo`; the side branches stay as they are | No conflicts, no history rewrite; `feat/plant-demo` stays the one branch to push |
+| 16 | The duplicate-row scan (`full=true`) gets 30 s instead of the 2 s query cap; `drill.sh proof` polls the light reconciliation until drained, then makes one full call | At 3.5 M rows the scan took over 2 s, so the proof printed "duplicate rows: None" while doc 00 §14 promises 0 on screen. The dashboard asks for it only when paused and drained, at most every 10 s |
+| 17 | The orphaned pre-R3 volumes `edd_gateway-<shop>-data` are kept, not deleted | Standing rule: never delete Docker volumes. They are small and unused |
+| 18 | `drill.sh lose-gateway-disk` is rehearsed even though it deletes one gateway volume | It is the approved drill 8; it deletes only that gateway's buffer, which is what it proves the system survives |
 
-## 5. Pending: resilience tier (user requirements, 12 November, evening)
+## 5. Superseded: resilience tier (built as R1–R4, see section 3)
 
 The user asked, in their own words:
 - "If one of the producer gets down the another will take its place, keep ready for back plans and fallback always"
@@ -113,7 +122,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** STOP POINT. The demo as built (Tasks 1–16, 7b, 10b, 13b, 14b) is complete, rehearsed and pushed: proof PASS 305,300 = 305,300 with 0 missing, 0 gaps, 0 duplicate rows. Resume in this order: (1) Apply the R1–R4 docs fix round to docs 00, 02 and 03: findings 1–7 in `.superpowers/sdd/03-implementation-plan/resilience-spec-review.md`, plus rulings 13 and 14 in section 4 (lease fencing; drain on revocation; `drained` needs every gateway buffer empty; standbys reconcile every 10 s; `cooperative-sticky` assignor; doc 02 'The limit' names the lost unsent alarm and the stranded backlog; seq numbers stay rebuilt from the plant log). Then a scoped re-review. (2) Build R1 → R2 → R3, and R4, via SDD from doc 03. (3) Final whole-branch review on Opus (deferred minors are in the ledger). If R1–R4 cannot be done before the demo, either revert `d175d4d` or present doc 02's resilience subsection as the designed next step, and say plainly that it is not built.
+3. **Right now:** H1, pre-demo hardening (Claude, from 12:30 IST). Done: R1–R4 fast-forwarded into feat/plant-demo; 170 unit ×3, 19 integration and 47 frontend tests green; stack rebuilt (21 containers, each shop's active instance named on its tile). In progress: README, doc 00 §14 (failover step) and doc nits from opencode's final review; duplicate-row scan 30 s; drill.sh proof prints over; full drill rehearsal (central-down/up, kill-gateway, failover, lose-gateway-disk, kill-consumer, proof after each); Opus re-review of R1–R3 code. Then: fix what the re-review and rehearsal find, final rehearsal from 17:00 IST. The demo is at 19:00 IST.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;

@@ -1,6 +1,6 @@
 # EventDrivenDotNet
 
-Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 machines stream readings while the central server is down for hours, and nothing may be lost or duplicated. Five edge gateways buffer on disk, a plant Kafka cluster rides out the outage, MirrorMaker 2 copies to a central cluster, and PostgreSQL stores each reading exactly once through a unique `(machine_id, seq)` key. Everything runs on one laptop with Docker Compose, with failure drills and a dashboard that proves zero loss and zero duplicates per machine.
+Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 machines stream readings while the central server is down for hours, and nothing may be lost or duplicated. Each of the five shops runs an active/standby pair of edge gateways that buffer on disk (if the active one dies, the standby takes over within seconds), a plant Kafka cluster rides out the outage, MirrorMaker 2 copies to a central cluster, and PostgreSQL stores each reading exactly once through a unique `(machine_id, seq)` key. Everything runs on one laptop with Docker Compose, with failure drills and a dashboard that proves zero loss and zero duplicates per machine.
 
 ![Plant to central: every container, port and data store](docs/diagrams/01-plant-to-central.svg)
 
@@ -16,7 +16,7 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 
 ### Prerequisites
 
-1. Docker Desktop with its memory set to 10 GB (the containers' limits add up to about 5.1 GB).
+1. Docker Desktop with its memory set to 10 GB (the 21 containers' limits add up to about 7.3 GB).
 2. `bash`, `curl` and `python3` for the drill and proof scripts.
 3. The .NET SDK 11.0.100 and Bun 1.4.4 only to develop or run the tests.
 
@@ -30,7 +30,7 @@ docker compose down -v                  # optional: a cold start from empty volu
 docker compose up -d --build --wait
 ```
 
-Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:3000> and give it a minute: five gateways healthy, about 500 readings per second.
+Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:3000> and give it a minute: five shops healthy, each tile naming its active gateway (`-a` or `-b`), about 500 readings per second.
 
 ### Drills
 
@@ -40,9 +40,12 @@ Run these from `src/deployment/` (the script works from anywhere). Each one prin
 | --- | --- | --- |
 | 1 | `scripts/drill.sh central-down` | Central Kafka, the consumers and the database go Down. The plant keeps writing, and its alarms stay live. Mirror lag grows |
 | 2 | `scripts/drill.sh central-up` | Mirror lag clears in seconds, then the database drains as its ETA counts down. The chart's gap fills in |
-| 3 | `scripts/drill.sh kill-gateway BDY` | The gateway restarts and its sequence numbers continue |
-| 4 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
-| 5 | `scripts/drill.sh pause` / `resume` | Stops or restarts all simulated machines |
+| 3 | `scripts/drill.sh failover BDY` | The shop's active gateway is killed; the standby takes over within about 15 s and the script prints how long it took. The killed one returns as the standby, with no second switch |
+| 4 | `scripts/drill.sh kill-gateway BDY` | The active gateway restarts from its disk and keeps the lease; its sequence numbers continue and missed seconds are backfilled |
+| 5 | `scripts/drill.sh lose-gateway-disk BDY` | The active gateway's disk is deleted; the rebuilt instance continues numbering from the plant log, with 0 gaps |
+| 6 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
+| 7 | `scripts/drill.sh wan-cut` / `wan-restore`, `plant-down` / `plant-up` | Mirror lag, or the gateway buffers, grow and then clear |
+| 8 | `scripts/drill.sh pause` / `resume` | Stops or restarts all simulated machines |
 
 To show the alarm lane, inject an alarm during the drain: `../scripts/live/api.sh fault P1-MCH-C017 Vibration`. It reaches central within seconds.
 
@@ -54,7 +57,7 @@ After `central-up`, the store writers resume in about 45 s and the backlog drain
 scripts/drill.sh proof
 ```
 
-It pauses the plant, waits until every buffer and lag is drained, then prints the reconciliation and exits 0 on PASS. PASS means, for every machine, generated equals stored, with 0 gaps and 0 duplicate rows. The duplicates-absorbed count shows how many redeliveries the unique `(machine_id, seq)` key swallowed. While anything is still buffered or lagging, the verdict is WAIT, never PASS.
+It pauses the plant, waits until every buffer and lag is drained, then prints the reconciliation and exits 0 on PASS. PASS means, for every machine, generated equals stored, with 0 gaps, no stored sequence beyond what was generated (`over` 0) and 0 duplicate rows. The duplicates-absorbed count shows how many redeliveries the unique `(machine_id, seq)` key swallowed. While anything is still buffered or lagging, the verdict is WAIT, never PASS.
 
 ### Stop
 
@@ -89,7 +92,7 @@ docker compose down        # keeps the volumes; add -v to delete them
 | # | Area | Choice |
 | --- | --- | --- |
 | 1 | Event medium | Apache Kafka 4.4 (KRaft): a plant cluster and a central cluster, joined by MirrorMaker 2 |
-| 2 | Edge | Five .NET gateways, each with a SQLite store-and-forward buffer (`synchronous=FULL`) |
+| 2 | Edge | Ten .NET gateways, an active/standby pair per shop held by a Kafka consumer-group lease, each with a SQLite store-and-forward buffer (`synchronous=FULL`) |
 | 3 | Store | PostgreSQL 18, primary key `(machine_id, seq)`, `INSERT … ON CONFLICT DO NOTHING` |
 | 4 | Runtime | .NET 11, C# 15, pure C# dispatch (no MediatR) |
 | 5 | Dashboard | React, Vite, TypeScript and Tailwind, built with Bun and served by nginx |
