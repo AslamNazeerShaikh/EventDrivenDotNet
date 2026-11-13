@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.Persistence</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="EventDrivenDesign.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\EventDrivenDesign.Shared\EventDrivenDesign.Shared.csproj" />
+  </ItemGroup>
+</Project>

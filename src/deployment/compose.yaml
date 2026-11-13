@@ -1,0 +1,327 @@
+name: edd
+
+x-gateway: &gateway
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: gateway
+  environment: &gateway-env
+    Gateway__Plant: P1
+    Gateway__FaultsPerMinute: "0.5"
+    Kafka__BootstrapServers: plant-kafka:9092
+    Buffer__Path: /data/buffer.db
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    plant-topics:
+      condition: service_completed_successfully
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  stop_grace_period: 30s # a stop drains the sender (up to 10 s) after the collector stops (up to 10 s)
+  networks: [plant]
+
+x-consumer: &consumer
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: consumer
+  environment: &consumer-env
+    Consumer__MaxRowsPerSecond: "1000"
+    Kafka__BootstrapServers: central-kafka:9092
+    ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    central-kafka:
+      condition: service_healthy
+    central-db:
+      condition: service_healthy
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  networks: [central]
+
+x-api: &api
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+    target: api
+  environment: &api-env
+    Api__Gateways: gateway-prs-a:8080,gateway-prs-b:8080,gateway-bdy-a:8080,gateway-bdy-b:8080,gateway-pnt-a:8080,gateway-pnt-b:8080,gateway-mch-a:8080,gateway-mch-b:8080,gateway-asm-a:8080,gateway-asm-b:8080
+    Api__Consumers: consumer-1:8080,consumer-2:8080
+    Kafka__Plant: plant-kafka:9092
+    Kafka__Central: central-kafka:9092
+    ConnectionStrings__Central: Host=central-db;Username=edd;Password=edd;Database=edd
+    ASPNETCORE_HTTP_PORTS: "8080"
+  depends_on:
+    plant-kafka:
+      condition: service_healthy
+    central-kafka:
+      condition: service_healthy
+    central-db:
+      condition: service_healthy
+  mem_limit: 256m
+  memswap_limit: 256m
+  restart: on-failure
+  networks: [plant, central, ops]
+
+x-mm2: &mm2
+  image: apache/kafka:4.4.0
+  command: ["/opt/kafka/bin/connect-mirror-maker.sh", "/etc/mm2/mm2.properties"]
+  environment:
+    # connect-mirror-maker.sh defaults to a 2 GB heap
+    KAFKA_HEAP_OPTS: -Xms128m -Xmx384m
+  volumes: [./kafka/mm2.properties:/etc/mm2/mm2.properties:ro]
+  depends_on:
+    plant-kafka:
+      condition: service_healthy
+    central-kafka:
+      condition: service_healthy
+    plant-topics:
+      condition: service_completed_successfully
+  mem_limit: 768m
+  memswap_limit: 768m
+  restart: on-failure
+  networks: [plant, central]
+
+services:
+  plant-kafka:
+    image: apache/kafka:4.4.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:19092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://plant-kafka:9092,HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@plant-kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    ports: ["19092:19092"]
+    volumes: [plant-kafka-data:/var/lib/kafka/data]
+    mem_limit: 1g
+    memswap_limit: 1g
+    networks: [plant]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 5s
+      retries: 30
+
+  central-kafka:
+    image: apache/kafka:4.4.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://central-kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@central-kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    ports: ["29092:29092"]
+    volumes: [central-kafka-data:/var/lib/kafka/data]
+    mem_limit: 1g
+    memswap_limit: 1g
+    networks: [central]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 5s
+      retries: 30
+
+  central-db:
+    image: postgres:18.6-alpine
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
+    environment:
+      POSTGRES_USER: edd
+      POSTGRES_PASSWORD: edd
+      POSTGRES_DB: edd
+    ports: ["55432:5432"]
+    volumes:
+      # PostgreSQL 18 keeps data under a version-specific directory, so mount the parent
+      - central-db-data:/var/lib/postgresql
+      - ./postgres/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    mem_limit: 256m
+    memswap_limit: 256m
+    networks: [central]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edd -d edd"]
+      interval: 5s
+      retries: 30
+
+  plant-topics:
+    image: apache/kafka:4.4.0
+    entrypoint: ["/bin/sh", "/create-topics.sh"]
+    volumes: [./kafka/create-topics.sh:/create-topics.sh:ro]
+    depends_on:
+      plant-kafka:
+        condition: service_healthy
+    mem_limit: 512m
+    memswap_limit: 512m
+    restart: "no"
+    networks: [plant]
+
+  gateway-prs-a:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PRS
+      Gateway__Instance: gateway-prs-a
+      Gateway__Seed: "1000"
+    volumes: [gateway-prs-a-data:/data]
+
+  gateway-prs-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PRS
+      Gateway__Instance: gateway-prs-b
+      Gateway__Seed: "1000"
+    volumes: [gateway-prs-b-data:/data]
+
+  gateway-bdy-a:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: BDY
+      Gateway__Instance: gateway-bdy-a
+      Gateway__Seed: "2000"
+    volumes: [gateway-bdy-a-data:/data]
+
+  gateway-bdy-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: BDY
+      Gateway__Instance: gateway-bdy-b
+      Gateway__Seed: "2000"
+    volumes: [gateway-bdy-b-data:/data]
+
+  gateway-pnt-a:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PNT
+      Gateway__Instance: gateway-pnt-a
+      Gateway__Seed: "3000"
+    volumes: [gateway-pnt-a-data:/data]
+
+  gateway-pnt-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: PNT
+      Gateway__Instance: gateway-pnt-b
+      Gateway__Seed: "3000"
+    volumes: [gateway-pnt-b-data:/data]
+
+  gateway-mch-a:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: MCH
+      Gateway__Instance: gateway-mch-a
+      Gateway__Seed: "4000"
+    volumes: [gateway-mch-a-data:/data]
+
+  gateway-mch-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: MCH
+      Gateway__Instance: gateway-mch-b
+      Gateway__Seed: "4000"
+    volumes: [gateway-mch-b-data:/data]
+
+  gateway-asm-a:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: ASM
+      Gateway__Instance: gateway-asm-a
+      Gateway__Seed: "5000"
+    volumes: [gateway-asm-a-data:/data]
+
+  gateway-asm-b:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      Gateway__Shop: ASM
+      Gateway__Instance: gateway-asm-b
+      Gateway__Seed: "5000"
+    volumes: [gateway-asm-b-data:/data]
+
+  # two dedicated workers in dedicated mode: one Connect group on the central cluster's flow topics, tasks shared and taken over (KIP-710)
+  mm2-1:
+    <<: *mm2
+    hostname: mm2-1
+
+  mm2-2:
+    <<: *mm2
+    hostname: mm2-2
+
+  consumer-1:
+    <<: *consumer
+    environment:
+      <<: *consumer-env
+      Consumer__Id: consumer-1
+
+  consumer-2:
+    <<: *consumer
+    environment:
+      <<: *consumer-env
+      Consumer__Id: consumer-2
+
+  # two control-room APIs behind the dashboard's nginx; each polls every source and shares nothing, so either can answer alone
+  api-1:
+    <<: *api
+
+  api-2:
+    <<: *api
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: dashboard
+    ports: ["3000:80"]
+    depends_on:
+      api-1:
+        condition: service_started
+      api-2:
+        condition: service_started
+    mem_limit: 64m
+    memswap_limit: 64m
+    restart: on-failure
+    networks: [ops]
+
+networks:
+  plant:
+  central:
+  ops:
+
+volumes:
+  plant-kafka-data:
+  central-kafka-data:
+  central-db-data:
+  gateway-prs-a-data:
+  gateway-prs-b-data:
+  gateway-bdy-a-data:
+  gateway-bdy-b-data:
+  gateway-pnt-a-data:
+  gateway-pnt-b-data:
+  gateway-mch-a-data:
+  gateway-mch-b-data:
+  gateway-asm-a-data:
+  gateway-asm-b-data:

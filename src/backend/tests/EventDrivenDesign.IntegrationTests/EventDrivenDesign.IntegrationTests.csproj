@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.IntegrationTests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\EventDrivenDesign.Gateway\EventDrivenDesign.Gateway.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Messaging\EventDrivenDesign.Messaging.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Persistence\EventDrivenDesign.Persistence.csproj" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.Kafka" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <None
+      Include="../../../deployment/postgres/01-schema.sql"
+      Link="01-schema.sql"
+      CopyToOutputDirectory="PreserveNewest"
+    />
+  </ItemGroup>
+</Project>

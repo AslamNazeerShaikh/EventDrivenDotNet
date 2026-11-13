@@ -88,21 +88,21 @@ Why the hybrid wins:
 
 ## 3. Architecture
 
-![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five edge gateways (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, a control-room API and dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
+![Plant to central, in detail: each shop's 100 devices connect over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant network per medium, and a unified device interface forwards their readings to five active/standby gateway pairs (collector, SQLite buffer, sender), which produce to plant Kafka. MirrorMaker 2 copies over the WAN into central Kafka, two store-writer consumers insert into PostgreSQL under a unique key, two control-room APIs and a dashboard watch every stage, and a ledger shows who writes and reads each store.](diagrams/01-plant-to-central.svg)
 
 *Source: [01-plant-to-central.html](diagrams/01-plant-to-central.html)*
 
 | # | Component | Where it runs | Job | Production sizing | In the demo |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Machines | Plant floor | Produce readings and alarms | 500 | Simulated inside the gateways |
-| 2 | Edge gateways | Plant, one per shop | Collect, sequence, buffer on disk, forward | Five industrial PCs with SSDs, each with a standby | Five containers, 100 machines each |
+| 2 | Edge gateways | Plant, one per shop | Collect, sequence, buffer on disk, forward | Five industrial PCs with SSDs, each with a standby | Five active/standby pairs (ten containers), 100 machines per shop |
 | 3 | Plant Kafka cluster | Plant server room | Durable plant-side log and seven-day buffer | Three brokers (KRaft mode), replication factor 3, `min.insync.replicas=2` | One broker |
 | 4 | Plant operations view | Plant | Local alarms and live status | Grafana at the plant | A dashboard panel |
-| 5 | MirrorMaker 2 | Central | Copy plant topics to central | Two or more workers in dedicated mode | One container |
+| 5 | MirrorMaker 2 | Central | Copy plant topics to central | Two or more workers in dedicated mode | Two containers in dedicated mode |
 | 6 | Central Kafka cluster | Central | Central replay log | Three brokers, replication factor 3 | One broker |
 | 7 | Store writers | Central | Batch insert, deduplicate, commit offsets | One consumer group, up to one instance per partition | Two containers |
 | 8 | Central database | Central | Store of record | PostgreSQL partitioned by day, or TimescaleDB | PostgreSQL 18 |
-| 9 | Monitoring | Both sites | Metrics and alerts | Prometheus, Alertmanager and Grafana at each site | Control-room API and dashboard |
+| 9 | Monitoring | Both sites | Metrics and alerts | Prometheus, Alertmanager and Grafana at each site | Control-room API (two instances) and dashboard |
 
 ### Topics
 
@@ -112,6 +112,7 @@ Why the hybrid wins:
 | 2 | `machine.alarms` | Plant | 3 | `machine_id` | 7 days | Threshold breaches and emergency stops |
 | 3 | `plant1.machine.readings` | Central | 12 (mirrored) | `machine_id` | 3 days | MirrorMaker 2 copy of topic 1 |
 | 4 | `plant1.machine.alarms` | Central | 3 (mirrored) | `machine_id` | 3 days | MirrorMaker 2 copy of topic 2 |
+| 5 | `gateway.lease.<shop>` | Plant | 1 | none | none | Never written to; its one partition is the active/standby lease of a shop's gateway pair (§4.3) |
 
 MirrorMaker 2's default replication policy adds the source cluster's alias as a prefix (`plant1.`). The prefix is kept on purpose: it is how several plants share one central cluster without name clashes.
 
@@ -198,7 +199,7 @@ CREATE TABLE machine_state (
 );
 ```
 
-The rules that make the buffer safe:
+The buffer is a transactional outbox: the reading, its sequence number and the machine's state commit in one local transaction, and a relay (the sender) publishes and deletes only after the broker acknowledges. The rules that make the buffer safe:
 
 1. **One writer.** A single thread owns every write, so the buffer never sees lock contention.
 2. **One transaction per tick.** Each second's readings and the updated `machine_state` rows commit together, which costs about one fsync per second. A crash can never leave a sequence number in use without its reading, or a reading without its number.
@@ -218,13 +219,66 @@ The rules that make the buffer safe:
 When a gateway restarts, it recovers in four steps:
 
 1. Open the SQLite file. Unacknowledged rows are still there.
-2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap. If the file is new (a replaced disk or a standby gateway), rebuild `machine_state` from the plant log first: the newest reading and alarm for each of its machines in the plant topics give the last sequence numbers and device time. Until the plant cluster answers, the gateway numbers nothing, because a number it cannot place could collide with a stored reading.
+2. Load `machine_state`, so every machine's sequence continues where it stopped, with no reuse and no gap. If the file is new (a replaced disk), or the gateway is taking over from its partner, reconcile `machine_state` with the plant log first: the newest reading and alarm for each of its machines in the plant topics give the last sequence numbers and device time. Until the plant cluster answers, the gateway numbers nothing, because a number it cannot place could collide with a stored reading.
 3. Backfill the seconds it missed from each machine's history (OPC UA HistoryRead), up to the history depth. Anything older is recorded as an explicit gap.
 4. Start the sender. If a backlog exists, the sender starts in its catch-up state.
 
 ![Gateway sender states: Starting, Sending, Catching up, Retrying and Stopping, with the conditions that move between them. No state deletes a row without a broker acknowledgement.](diagrams/06-sender-states.svg)
 
 *Source: [06-sender-states.html](diagrams/06-sender-states.html)*
+
+#### Fault tolerance and zero downtime
+
+Absolute zero downtime is not possible across a network: processes die, links drop, and a switch-over takes seconds. So the target is stated in a form that can be checked:
+
+1. **No single point of failure.** Every component has a backup that takes over without an operator.
+2. **Zero data loss.** Every reading path ends in a resend or a re-read, never a drop (sections 4.1 and 4.10). Alarms share every path except backfill: one buffered only on an instance that dies with its disk is not replayed (The limit below).
+3. **Failover in seconds.** A gateway's standby takes over within 15 seconds, and every other backup within a minute at most. The table below says how long each one takes.
+4. **Component downtime never becomes data downtime.** The seconds a gateway misses while it switches over are re-read from the machines' own history, so the data has no hole even when a process had one.
+
+| # | Component | Backup | How it fails over | Time to take over | In the demo |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Edge gateway | An active/standby pair per shop, each with its own disk | A lease in the plant cluster makes exactly one instance active. When the active one goes silent, the standby is granted the lease | Under 15 s | `gateway-<shop>-a` and `-b`; the `failover` drill |
+| 2 | Plant Kafka | Three brokers, replication factor 3, `min.insync.replicas=2` | A surviving broker becomes the partition leader | Seconds | One broker (production only) |
+| 3 | MirrorMaker 2 | Two workers in dedicated mode, in one group | The surviving worker takes the dead worker's tasks and resumes from the saved offsets | About 20 s (a 10 s worker session, then a 10 s rebalance delay) | `mm2-1` and `mm2-2` |
+| 4 | Central Kafka | Three brokers, replication factor 3 | As row 2 | Seconds | One broker (production only) |
+| 5 | Store writers | Two consumers in one group | The group rebalances; the uncommitted batch is redelivered and the key absorbs it | Under a minute (the consumer session timeout) | `consumer-1` and `consumer-2` |
+| 6 | Central database | A synchronous standby with automatic failover (Patroni) | The standby is promoted; store writers retry and commit no offsets meanwhile | Tens of seconds | One PostgreSQL (production only) |
+| 7 | Control-room API | Two instances behind nginx | nginx sends a request to the other instance when one refuses or times out | The next request | `api-1` and `api-2` |
+| 8 | Any process | A restart policy (Compose here, systemd or Kubernetes in production) | The process restarts and recovers from its own disk | Seconds | `restart: on-failure` on every .NET service |
+
+How the gateway lease works:
+
+1. Each shop has a Kafka topic `gateway.lease.<shop>` with one partition, which nobody writes to. Both instances of the pair join the consumer group `gateway-lease-<shop>`. Kafka gives the one partition to exactly one member. That member is active; the other is the standby.
+2. Each instance is a static member (`group.instance.id` is its name), with `session.timeout.ms=6000` and `heartbeat.interval.ms=2000`. The group uses the `cooperative-sticky` assignment strategy, so the current owner keeps the lease and a repaired instance rejoins as the standby (section 4.10 row 6). An instance that restarts within 6 s keeps the lease. One that stays silent for 6 s loses it, and the standby is granted it.
+3. On assignment, the new active instance fences first: if anything from a previous term still runs (it survived a lost session), it stops the sender at once. It then reconciles its buffer with the plant log, taking the (sequence, device time) pair from whichever side is further ahead per machine — never a maximum per field — and resumes numbering from that state. It backfills the seconds since each machine's last reading from machine history, up to the history depth, and only then starts the collector and the sender. Every assignment after a lost session starts such a new term, so two instances never number the same seconds twice. One sub-second race remains: the old sender can write between the loss and the lost callback. Only the production transactional fencing below closes it.
+4. On revocation, it stops the collector, drains the sender while the broker still acknowledges (bounded, about 10 s), and only then returns. The standby is granted the lease only after this returns, so the two writers never overlap. Unacknowledged rows stay on its disk. Its next reconcile drops the ones the log already holds and sends the rest.
+5. While the plant cluster is unreachable, nobody can be granted the lease, so the lease does not move. The active instance keeps collecting into its disk buffer (section 4.2, tier 1). The standby could not take over safely anyway, because it cannot read the log to learn where numbering stands.
+
+A standby reconciles its buffer against the plant log on start and every 10 s: it deletes local rows the log already holds and holds rows numbered past the log. It numbers nothing while it waits.
+
+Why a takeover creates no loss and no duplicate rows: the new active instance continues each machine's numbering from the plant log, never from its own memory or disk, and it re-reads the seconds it missed from machine history. If both instances numbered the same second, the sequence number is the same, so the database key keeps one copy. In production that copy is the same machine sample, re-read from machine history; in the demo the simulator re-creates the values, so the two copies can differ in payload while the key still keeps the first. The proof counts rows per sequence number, so those counts stay exact.
+
+Why the lease lives in Kafka: the gateways already depend on the plant cluster, which is replicated. A lease there adds no coordinator to run (no ZooKeeper, etcd or virtual IP), and the cluster that stores the data also decides who may write it.
+
+The limit, stated plainly: if a gateway crashes while the whole plant cluster is down, neither instance can be granted the lease until the cluster returns, so nothing collects in between. When it returns, the active instance backfills up to the history depth and records anything older as a `DataGap` alarm, so the loss is explicit. It takes two failures at once, and with three brokers a whole-cluster outage is itself rare.
+
+Two smaller limits remain, both inside the design rather than accidents. An alarm that an instance buffered but never sent and never drained is lost with that instance: backfill replays readings from machine history, never alarms, so the partner's next alarm takes that `alarm_seq` and the lost one never appears at central. The proof counts readings, so it does not flag that alarm. A backlog stranded on an instance that is down while its partner numbers and backfills the same seconds becomes a `DataGap` once those seconds pass the history depth, even though the rows are still on the stranded disk: the partner cannot read another instance's buffer, and the plant log does not hold rows nobody has sent. Both need an instance to stay down past the depth (600 s in the demo) while its partner is active; a repair inside the depth loses nothing. While such an unsent alarm sits on the standby's disk, the proof stays at WAIT rather than PASS, so it is never hidden.
+
+After a plant-cluster outage the lease stays where it was: the broker restarts each static member's 6 s session when it reloads the group, and the lease consumer reconnects within 1 s (`reconnect.backoff.max.ms`), so the active instance rejoins first and sends its outage backlog. If it cannot reconnect within the 6 s, the lease moves and the stranded-backlog case above applies.
+
+The demo's pause is a control, not part of the design, and each instance keeps it on its own disk. If the active instance dies while the plant runs and the operator pauses before the standby takes over, the standby starts paused and does not backfill the seconds in between. Two smaller cases follow from the same per-disk pause. A disk rebuilt while the plant is paused starts unpaused, until the proof's pause, re-sent every 2 s, reaches it. A standby that was down during a resume keeps its pause, and if it takes over, the shop's tile shows Paused until the next resume. Production has no pause: the backfill always runs to the present.
+
+The demo proves the gateway failover with `drill.sh failover BDY` ([doc 00 §10](00-edd-demo-game-plan.md#10-failure-drills)): it kills the Body shop's active gateway, the standby takes over within 15 s, and the proof still shows PASS with 0 gaps.
+
+Production only, documented and not built, to fit a laptop's memory:
+
+| # | Measure | What it adds |
+| --- | --- | --- |
+| 1 | Three brokers per site, replication factor 3, `min.insync.replicas=2` | Losing a broker loses no acknowledged write and stops nothing |
+| 2 | A PostgreSQL synchronous standby with automatic failover (Patroni) | The store of record survives losing its server |
+| 3 | `transactional.id` zombie fencing on the gateways, with `isolation.level=read_committed` in MirrorMaker 2 | Both instances of a pair use one `transactional.id`. When the new active instance starts its producer, the broker fences the old one, so a gateway that was cut off and comes back cannot write. MirrorMaker 2 never copies an aborted write |
+| 4 | Rolling upgrades of each gateway pair: upgrade the standby, switch over, then upgrade the other | Upgrades with no gap in collection |
 
 ### 4.4 Role of the Kafka-like component
 
@@ -254,7 +308,19 @@ The Kafka client on its own gives up on a message after `message.timeout.ms`, wh
 
 ### 4.6 Duplicate handling
 
-At-least-once delivery means resends, and resends mean duplicates. They are removed at exactly one place.
+At-least-once delivery means resends, and resends mean duplicates. Every hop is idempotent, so a repeat changes nothing:
+
+| # | Hop | Repeat that can happen | What makes the repeat harmless | Proven by |
+| --- | --- | --- | --- | --- |
+| 1 | Machine history → gateway | A re-read of a sample the gateway already holds | The gateway skips samples at or before `last_device_time_ms` | Backfill test |
+| 2 | Control room → gateway | Pause, resume or a fault sent twice | Pause and resume set a persisted flag; a fault on a signal that is already faulted is ignored | Gateway-control and simulator tests |
+| 3 | Gateway → plant Kafka, one session | The client retries a send | Idempotent producer | Producer-settings test |
+| 4 | Gateway restart → plant Kafka | Rows acknowledged but not yet deleted are sent again | The `(machine_id, seq)` key at the sink | Sender and store tests |
+| 5 | MirrorMaker 2 restart | Records copied again from the last saved offset | The same key | Central-down drill |
+| 6 | Store writer crash | The batch committed but its offset did not | The same key, with the counters in the same transaction (an idempotent consumer) | "Every reading twice is stored once" test |
+| 7 | A malformed record delivered again | The same offset rejected twice | `rejected_records` keyed by `(topic, partition, offset)` | Store test |
+
+Duplicates of readings are removed at exactly one place.
 
 ![Where duplicates come from: gateway resends, MirrorMaker 2 restarts and store writer crashes all lead to one unique key on (machine_id, seq) in the central database, which inserts each reading once and counts the duplicates it skipped. Client retries and history backfill are stopped before the key.](diagrams/05-duplicates.svg)
 
@@ -327,7 +393,7 @@ At 500 records per second, Kafka is nowhere near its limits; a single partition 
 
 *Source: [07-multi-plant.html](diagrams/07-multi-plant.html)*
 
-Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plants. Store writers subscribe to `^plant\d+\.machine\.readings$`, so a new plant needs no code change.
+Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plants. Store writers subscribe to `^plant[0-9]+\.machine\.readings$`, so a new plant needs no code change.
 
 ### 4.10 Failure scenarios
 
@@ -337,8 +403,8 @@ Machine IDs include the plant (`P2-BDY-W042`), so keys never collide across plan
 | 2 | WAN link down | MirrorMaker 2 connection errors; mirror lag | Same as 1 | Same as 1 | No |
 | 3 | One plant broker fails | Under-replicated partitions | Leaders move to the remaining brokers; writes continue with 2 of 3 replicas | Replace the broker; it re-syncs | No |
 | 4 | Whole plant cluster down | Gateway send errors; buffer depth and oldest-age alerts | Gateways buffer on disk (24 hours of capacity) | Gateways drain when the cluster returns, alarms first | No |
-| 5 | Gateway process crash or reboot | Machine-silence and gateway-health alerts | Committed rows are safe on disk | Restart, resume sequences, backfill from machine history, resend | No; resends become duplicates and are absorbed |
-| 6 | Gateway disk or hardware failure | Gateway health | Its unsent rows are lost with the disk | The standby takes over once the failed gateway is fenced off, rebuilds its sequence state from the plant log, and re-reads machine history within its depth | Only beyond the history depth, and then reported as an explicit gap |
+| 5 | Gateway process crash or reboot | Machine-silence and gateway-health alerts | Committed rows are safe on its disk. A restart within 6 s keeps the lease; otherwise the standby is granted it within 15 s (section 4.3, "Fault tolerance and zero downtime") | The active instance reconciles with the plant log, backfills the missed seconds from machine history, and resends; the other instance stays or becomes the standby | No; resends become duplicates and are absorbed |
+| 6 | Gateway disk or hardware failure | Gateway-health alerts; the lease expires after 6 s | Its unsent rows are lost with the disk | The standby takes the lease, reconciles its sequence state with the plant log, and re-reads machine history within its depth. The repaired instance rejoins as the standby | Unsent alarms on that disk; readings only beyond the history depth, then as an explicit gap |
 | 7 | Store writer crash mid-batch | Consumer group rebalance | Uncommitted offsets are redelivered | Another instance takes the partitions | No; repeats are absorbed |
 | 8 | Database down or failing over | Store-writer errors; lag | Store writers retry and do not commit offsets | Resume after failover | No |
 | 9 | A malformed record | Parse failure | The record goes to a `rejected_records` table with its partition and offset, in the same transaction | Fix and replay from that table | No; it is quarantined, not dropped |
@@ -414,7 +480,7 @@ After an outage, six hours of old readings arrive in a burst. If charts bucketed
 
 The panel sees the design run, not just described. The data path in sections 3 to 6 runs on one laptop with Docker Compose, simplified only as the first table below says. Every container runs a Docker Official Image or an image from a Verified Publisher, except Kafka. Kafka has no Docker Official Image, so the demo uses the Apache Kafka project's own `apache/kafka` image. The build details are in [doc 00](00-edd-demo-game-plan.md).
 
-![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and five gateways), a central network (central Kafka, two consumers, PostgreSQL), MirrorMaker 2 spanning both, and an ops network for the control-room API and dashboard.](diagrams/08-demo-deployment.svg)
+![The demo on one laptop: Docker Compose runs a plant network (plant Kafka and ten gateways in five active/standby pairs), a central network (central Kafka, two consumers, PostgreSQL), two MirrorMaker 2 workers spanning both, and an ops network for the two control-room APIs behind the dashboard's nginx and the dashboard.](diagrams/08-demo-deployment.svg)
 
 *Source: [08-demo-deployment.html](diagrams/08-demo-deployment.html)*
 
@@ -436,7 +502,7 @@ The panel sees the design run, not just described. The data path in sections 3 t
 | 5 | **Consumer crash:** kill a consumer mid-batch | The group rebalances and the redelivered batch is absorbed | 6, 10 |
 | 6 | **Alarm during catch-up:** inject an alarm while drill 1 recovers | The alarm reaches central within seconds while the readings backlog is still draining | 8 |
 
-**The proof.** Pause the simulated machines, wait for every lag to reach 0, then compare per machine: readings generated at the gateway = rows stored centrally, with 0 sequence gaps. The duplicates-absorbed counter shows how many repeats arrived and were dropped. The dashboard shows the per-machine result, and an automated end-to-end test asserts the same.
+**The proof.** Pause the simulated machines on every instance, standbys included, and re-send the pause until each one answers; wait for every instance's buffer and every lag to reach 0, then compare per machine: readings generated by the shop's active instance = rows stored centrally, with 0 sequence gaps. A stored sequence number beyond what the active instance generated is a `FAIL`, not a `PASS`: it means a second writer numbered the same machine. The duplicates-absorbed counter shows how many repeats arrived and were dropped. The dashboard shows the per-machine result, and an automated end-to-end test asserts the same.
 
 ---
 
