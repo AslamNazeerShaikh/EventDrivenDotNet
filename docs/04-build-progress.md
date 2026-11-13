@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 16:25 IST: run-and-operate guide (doc 05) added; stack stopped with the plant paused, volumes kept, Docker Desktop quit. Ready for the 19:00 IST demo.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 16:40 IST: doc 05 gains the storage analysis (sizes, growth, how to free space, never delete only database rows). Stack running for local testing.
 
 ## 1. Where things are
 

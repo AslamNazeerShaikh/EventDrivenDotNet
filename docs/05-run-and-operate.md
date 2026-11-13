@@ -111,6 +111,40 @@ docker compose up -d --wait
 
 Only do this when you want a cold start with zero rows. It cannot be undone.
 
+### Storage: how big it gets and how to free space
+
+Measured on 13 November 2026 at 16:35 IST, after about a day of running:
+
+| # | What | Size | How it grows |
+| --- | --- | --- | --- |
+| 1 | PostgreSQL (`edd_central-db-data`) | 6.6 GB, 22.5 M rows | About 0.5 GB per hour while the plant runs (500 rows/s). Nothing deletes rows: every stored reading is kept |
+| 2 | Central Kafka (`edd_central-kafka-data`) | 11.5 GB | Capped by retention (8 h for readings). Kafka deletes only whole 1 GB segment files, so the volume can sit above 8 hours' worth |
+| 3 | Plant Kafka (`edd_plant-kafka-data`) | 5.4 GB | Capped the same way |
+| 4 | Gateway buffers (10 volumes) | a few MB each | Rows are deleted once Kafka acknowledges them, so they stay near empty unless Kafka is down |
+| 5 | Docker build cache | 24.8 GB, of which 21 GB is reclaimable | Old image-build layers; no data |
+| 6 | Docker's whole disk | 45.8 GB used of 910 GB (5%) | Plenty of room: running all night adds a few GB |
+
+The size is not a load problem. At 22.5 M rows the database used about 3% CPU and 149 MB of its 256 MB limit, had no slow queries, and kept up with 500 rows/s. The one place size shows is the dashboard's duplicate scan, which takes about 6–10 s at 16–22 M rows.
+
+Check the sizes yourself:
+
+```sh
+docker system df                                   # images, volumes, build cache
+docker system df -v | grep edd_                     # each volume's size
+docker compose exec central-db psql -U edd -d edd -c "SELECT pg_size_pretty(pg_database_size('edd'));"
+docker stats --no-stream edd-central-db-1           # CPU and memory of the database
+```
+
+Three ways to handle it:
+
+| # | Option | Command | What you lose |
+| --- | --- | --- | --- |
+| 1 | Keep everything (the default) | none | nothing; the demo and the proof work at this size |
+| 2 | Free disk without touching any data | `docker builder prune` | only the build cache (about 21 GB); the next image build is slower |
+| 3 | Clean start with small numbers | `docker compose down -v`, `docker compose up -d --wait`, then `scripts/drill.sh resume` | **everything**: the database, both Kafka logs and every gateway buffer, together. Numbering restarts from 1 everywhere, so the proof stays consistent. Run `src/scripts/live/rehearse.sh 120` afterwards |
+
+**Never delete only database rows** (for example `TRUNCATE readings`). The gateways keep numbering from where they are, and the proof compares what they generated with what is stored. It would then show millions of readings missing and FAIL. Reset all the stores together (option 3), or none.
+
 ## 5. Scripts that do the work
 
 Full list with usage: [`src/scripts/README.md`](../src/scripts/README.md). Every script prints its help with `-h`.
@@ -282,3 +316,5 @@ Afterwards: `scripts/drill.sh resume`.
 | 8 | A container keeps restarting | It failed its start-up (for example, a broker not ready) | `docker compose logs --tail 50 <service>`; services restart on failure by themselves |
 | 9 | Fan loud, Docker VM busy | Each Kafka health check starts a Java process every 5 s (about 0.75 core for both brokers) | Harmless. Stop the stack when not in use (section 4) |
 | 10 | Port 3000 in use | Another program holds it | Stop that program, or change `3000:80` in `compose.yaml` |
+| 11 | The database looks overloaded | Usually only big: about 0.5 GB and 1.8 M rows per hour | `docker stats --no-stream edd-central-db-1` (a few % CPU is normal) and the consumer lag in `api.sh overview`. See "Storage" in section 4 |
+| 12 | Docker disk filling up | The build cache (about 21 GB reclaimable) and data volumes growing | `docker system df`; `docker builder prune` frees the cache safely. Never delete only database rows (section 4) |
