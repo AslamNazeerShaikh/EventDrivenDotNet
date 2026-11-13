@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # api.sh: talk to the running control-room API from the host.
 #
-# Goes through the dashboard's nginx on http://localhost:3000, which proxies
+# Goes through the dashboard's nginx on http://localhost:4000, which proxies
 # /api/* to the API. Override with API_BASE (e.g. API_BASE=http://localhost:8080).
 # JSON is pretty-printed with python3, so jq is not needed.
 #
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]] && { sed -n '2,21p' "$0"; exit 0; }
-BASE="${API_BASE:-http://localhost:3000}"
+BASE="${API_BASE:-http://localhost:4000}"
 get()  { curl -fsS --max-time 10 "$BASE$1"; }
 post() { curl -fsS --max-time 10 -X POST -H 'Content-Type: application/json' --data "${2:-}" "$BASE$1" -o /dev/null -w '%{http_code}\n'; }
 

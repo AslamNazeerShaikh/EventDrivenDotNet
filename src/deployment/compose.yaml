@@ -298,7 +298,7 @@ services:
       context: ..
       dockerfile: deployment/Dockerfile
       target: dashboard
-    ports: ["3000:80"]
+    ports: ["4000:80"]
     depends_on:
       api-1:
         condition: service_started

@@ -8,7 +8,7 @@ the repo (write them to /tmp or the git-ignored .superpowers/ folder).
 Usage:
   python3 src/scripts/diagrams/screenshot.py TARGET OUT.png [options]
 
-  TARGET           a URL (http://localhost:3000) or a path to a .html file
+  TARGET           a URL (http://localhost:4000) or a path to a .html file
   --width W        viewport width in CSS px (default 1440)
   --height H       viewport height (default 900)
   --scale S        device scale factor (default 1; use 2 for crisp text)
@@ -26,8 +26,8 @@ Usage:
 Requires: pip install playwright && playwright install chromium
 
 Examples:
-  python3 src/scripts/diagrams/screenshot.py http://localhost:3000 /tmp/down.png --full --run "src/deployment/scripts/drill.sh central-down" --after 20
-  python3 src/scripts/diagrams/screenshot.py http://localhost:3000 /tmp/dash.png --width 390 --height 844 --full
+  python3 src/scripts/diagrams/screenshot.py http://localhost:4000 /tmp/down.png --full --run "src/deployment/scripts/drill.sh central-down" --after 20
+  python3 src/scripts/diagrams/screenshot.py http://localhost:4000 /tmp/dash.png --width 390 --height 844 --full
   python3 src/scripts/diagrams/screenshot.py docs/diagrams/01-plant-to-central.html /tmp/top.png --svg --clip 0,0,1440,920
 """
 import argparse

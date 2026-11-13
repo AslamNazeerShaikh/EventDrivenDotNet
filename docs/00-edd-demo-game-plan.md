@@ -42,7 +42,7 @@ The demo simulates 500 machines in five shops. Each shop's edge gateway buffers 
 | 5 | Packaging | Docker Compose: 21 containers on three networks, about 7.3 GB of memory limits (14 containers and 5.1 GB before the resilience tier) |
 | 6 | Images | Docker Official Images or Verified Publisher images only, except `apache/kafka` (Kafka has no Docker Official Image) |
 | 7 | Runtime and language | .NET 11 and C# 15; `EventDrivenDesign.*` projects only |
-| 8 | Dashboard | React 19, Vite 8, TypeScript 7 and Tailwind 4, built with Bun and served by nginx on `:3000` |
+| 8 | Dashboard | React 19, Vite 8, TypeScript 7 and Tailwind 4, built with Bun and served by nginx on `:4000` |
 | 9 | Tests | xUnit.net v3 for unit and integration tests (integration tests use Testcontainers); Playwright for .NET for end-to-end tests |
 | 10 | The proof | After pausing the machines and draining every lag: generated = stored for each of the 500 machines, with 0 gaps; the duplicates-absorbed counter shows that duplicates arrived and were dropped |
 
@@ -131,7 +131,7 @@ The table shows the stack once the resilience tier is built (doc 02 §4.3, "Faul
 | 16 | `central-db` | `postgres:18.6-alpine` | central | 256 MB | `central-db-data` | 55432 | Must |
 | 17–18 | `consumer-1`, `consumer-2` | `EventDrivenDesign.Consumer` | central | 256 MB each | — | — | Must |
 | 19–20 | `api-1`, `api-2`: behind the dashboard's nginx | `EventDrivenDesign.Api` | plant, central, ops | 256 MB each | — | — | Must (one), R4 (the second) |
-| 21 | `dashboard` | `nginx:1.30-alpine-slim` with the React build | ops | 64 MB | — | 3000 | Must |
+| 21 | `dashboard` | `nginx:1.30-alpine-slim` with the React build | ops | 64 MB | — | 4000 | Must |
 
 | # | Stage | Containers | Running total of limits |
 | --- | --- | --- | --- |
@@ -554,7 +554,7 @@ The watermark is the oldest `max_device_time` among machines whose `stored = max
 
 ## 9. Dashboard
 
-React, Vite, TypeScript and Tailwind, built with Bun and served by nginx on `:3000`. Every API call uses a relative `/api/...` path, which nginx proxies to `api:8080`; after R4, to an `upstream` of `api-1` and `api-2` with a passive health check (a refused or timed-out connection moves the request to the other instance). TanStack Query polls every second. After R3, the buffers panel names each shop's active instance.
+React, Vite, TypeScript and Tailwind, built with Bun and served by nginx on `:4000`. Every API call uses a relative `/api/...` path, which nginx proxies to `api:8080`; after R4, to an `upstream` of `api-1` and `api-2` with a passive health check (a refused or timed-out connection moves the request to the other instance). TanStack Query polls every second. After R3, the buffers panel names each shop's active instance.
 
 ```text
 ┌ Plant to central ─────────────────────────────────────────────────────────┐
@@ -713,7 +713,7 @@ Every resilience task ends with `drill.sh proof` at PASS with 0 gaps. If the tie
 About 12 minutes, told as one story: break the central site, watch the plant carry on, bring central back, prove nothing was lost or duplicated.
 
 1. **The design (2 min).** Walk through doc 02's [diagram 1](diagrams/01-plant-to-central.svg): two tiers of buffering, one deduplication point.
-2. **Steady state.** Open `:3000`. Everything is green, 500 readings per second, freshness about 1 s.
+2. **Steady state.** Open `:4000`. Everything is green, 500 readings per second, freshness about 1 s.
 3. **Central down.** Run `drill.sh central-down` and wait 2 minutes. The plant keeps writing, plant alarms stay live, and about 60,000 readings build up in the plant cluster.
 4. **Central back.** Run `drill.sh central-up`. Mirror lag clears in seconds. About 45 s later the store writers resume, and the database drains as its ETA counts down, in about as long as the outage lasted (2 minutes 15 seconds for a 2.5-minute outage in the rehearsal). The chart's two-minute hole fills in by device time. Inject an alarm during the drain: it reaches central within seconds.
 5. **Crash a gateway.** Run `drill.sh kill-gateway BDY`. It restarts at once, the standby takes the lease, the sequences continue, and the missed seconds are backfilled. Say up front that duplicates absorbed rises only if the kill lands between an acknowledgement and a delete; the central-down drill has already shown the counter working.

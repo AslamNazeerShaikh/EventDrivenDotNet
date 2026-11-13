@@ -39,7 +39,7 @@ Docker Compose project `edd` (`src/deployment/compose.yaml`) runs 21 containers 
 | 6 | `consumer-1`, `consumer-2` | Store writers: insert into PostgreSQL | none |
 | 7 | `central-db` | PostgreSQL 18, database `edd`, user `edd`, password `edd` (demo only) | 55432 |
 | 8 | `api-1`, `api-2` | Control-room API | none (reached through the dashboard) |
-| 9 | `dashboard` | nginx: serves the dashboard and proxies `/api/` to both APIs | **3000** |
+| 9 | `dashboard` | nginx: serves the dashboard and proxies `/api/` to both APIs | **4000** |
 
 Machines are simulated inside the gateways: 500 machines, 100 per shop, one reading per machine per second. Machine IDs look like `P1-<SHOP>-<letter><nnn>` (every range is in section 9, "Alarms in detail"), for example `P1-BDY-W042` (a weld robot in Body) or `P1-MCH-C017` (a CNC machine in Machining). The shops are `PRS` (press), `BDY` (body), `PNT` (paint), `MCH` (machining) and `ASM` (assembly).
 
@@ -83,7 +83,7 @@ docker compose up -d --wait              # add --build after any code change
    ```
 
    You can also use **Resume** in the dashboard's Alarms panel.
-4. Open <http://localhost:3000>. Within a minute: all stages green, five shops each naming their active gateway (`a` or `b`), about 500 readings per second.
+4. Open <http://localhost:4000>. Within a minute: all stages green, five shops each naming their active gateway (`a` or `b`), about 500 readings per second.
 
 ### Check it is up
 
@@ -166,11 +166,11 @@ Run the `docker compose` commands from `src/deployment`.
 
 | # | Data | Where |
 | --- | --- | --- |
-| 1 | Everything live | Dashboard <http://localhost:3000> (section 9) |
+| 1 | Everything live | Dashboard <http://localhost:4000> (section 9) |
 | 2 | Pipeline summary | `../scripts/live/api.sh overview` |
-| 3 | The proof, per machine | `../scripts/live/api.sh proof full`, or `curl -s 'localhost:3000/api/reconciliation?full=true'` |
+| 3 | The proof, per machine | `../scripts/live/api.sh proof full`, or `curl -s 'localhost:4000/api/reconciliation?full=true'` |
 | 4 | Latest alarms at central | `../scripts/live/api.sh alarms` |
-| 5 | Raw API JSON | `curl -s localhost:3000/api/overview`, `/api/chart?minutes=10`, `/api/alarms` |
+| 5 | Raw API JSON | `curl -s localhost:4000/api/overview`, `/api/chart?minutes=10`, `/api/alarms` |
 
 ### One gateway
 
@@ -260,7 +260,7 @@ Each drill runs from `src/deployment` and prints the Docker commands it runs. Af
 
 1. Start Docker, start the stack, and resume the plant (section 4).
 2. Run `src/scripts/live/rehearse.sh 120` once. It must end with `REHEARSAL PASSED`.
-3. Open <http://localhost:3000> in the browser you will present from, and close other heavy tabs.
+3. Open <http://localhost:4000> in the browser you will present from, and close other heavy tabs.
 4. Keep a terminal open in `src/deployment`.
 
 ### The 12-minute script
@@ -282,7 +282,7 @@ Afterwards: `scripts/drill.sh resume`.
 
 ## 9. The dashboard, panel by panel
 
-<http://localhost:3000>. Everything refreshes every second. Times are UTC. A panel whose request fails keeps its last data and says "Not updating, showing the last data received.", or "No data yet. … Retrying every second." if it never had any. If the API itself cannot be reached, a red banner at the top says so.
+<http://localhost:4000>. Everything refreshes every second. Times are UTC. A panel whose request fails keeps its last data and says "Not updating, showing the last data received.", or "No data yet. … Retrying every second." if it never had any. If the API itself cannot be reached, a red banner at the top says so.
 
 ### Health badges
 
@@ -408,7 +408,7 @@ Normal readings wander inside each signal's normal range (for example `vibration
 
 | # | Symptom | Cause | Fix |
 | --- | --- | --- | --- |
-| 1 | `localhost:3000` does not load | Stack not started, or the `dashboard` container is down | `docker compose ps`; `docker compose up -d --wait` |
+| 1 | `localhost:4000` does not load | Stack not started, or the `dashboard` container is down | `docker compose ps`; `docker compose up -d --wait` |
 | 2 | Red "API unreachable" banner | Both APIs down or still starting | `docker compose ps api-1 api-2`; wait 10 s; `docker compose up -d api-1 api-2` |
 | 3 | Proof stays WAIT | The plant is running, or a buffer or lag is not empty yet | `scripts/drill.sh proof` pauses and waits up to 5 min. Check `../scripts/live/api.sh overview` for a non-zero buffer or lag |
 | 4 | Rate stays 0 after a start | The plant was paused before it was stopped | `scripts/drill.sh resume` |
@@ -417,7 +417,7 @@ Normal readings wander inside each signal's normal range (for example `vibration
 | 7 | `failover` prints "did not take over" | A gateway is still starting, or busybox could not be pulled offline | Wait 30 s and run it again; `docker pull busybox` while online |
 | 8 | A container keeps restarting | It failed its start-up (for example, a broker not ready) | `docker compose logs --tail 50 <service>`; services restart on failure by themselves |
 | 9 | Fan loud, Docker VM busy | Each Kafka health check starts a Java process every 5 s (about 0.75 core for both brokers) | Harmless. Stop the stack when not in use (section 4) |
-| 10 | Port 3000 in use | Another program holds it | Stop that program, or change `3000:80` in `compose.yaml` |
+| 10 | Port 4000 in use | Another program holds it | Stop that program, or change `4000:80` in `compose.yaml` |
 | 11 | The database looks overloaded | Usually only big: about 0.5 GB and 1.8 M rows per hour | `docker stats --no-stream edd-central-db-1` (a few % CPU is normal) and the consumer lag in `api.sh overview`. See "Storage" in section 4 |
 | 12 | Docker disk filling up | The build cache (about 21 GB reclaimable) and data volumes growing | `docker system df`; `docker builder prune` frees the cache safely. Never delete only database rows (section 4) |
 | 13 | **Inject alarm** shows an error or nothing appears | The kind does not fit the machine type, the ID is wrong, the plant is paused, or central has just come back | See "Alarms in detail" (section 9), rules 2–8; for example Vibration works on `P1-MCH-C017`, not on `P1-BDY-W042` |

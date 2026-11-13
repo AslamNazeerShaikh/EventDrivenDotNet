@@ -31,7 +31,7 @@ docker compose down -v                  # optional: a cold start from empty volu
 docker compose up -d --build --wait
 ```
 
-Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:3000> and give it a minute: five shops healthy, each tile naming its active gateway (`-a` or `-b`), about 500 readings per second.
+Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:4000> and give it a minute: five shops healthy, each tile naming its active gateway (`-a` or `-b`), about 500 readings per second.
 
 ### Drills
 
@@ -177,7 +177,7 @@ Editable source: [`docs/diagrams/10-frontend-codebase.html`](docs/diagrams/10-fr
 
 The dashboard lives in `src/frontend`. It uses React 19, TypeScript 7 (strict, `tsc -b`), Vite 8, Tailwind 4, TanStack React Query 5 and Recharts 3, and is built and tested with Bun 1.4.4.
 
-- **Build and serve:** the Dockerfile's `web` stage builds `dist/`, and the `dashboard` stage serves it from nginx on port 3000.
+- **Build and serve:** the Dockerfile's `web` stage builds `dist/`, and the `dashboard` stage serves it from nginx on port 4000.
 - **Routing:** nginx sends `/api/` to `api-1` and `api-2` (with `ip_hash`, a passive health check and retry on the next API), and every other path to `index.html`.
 - **Data flow:** `api.ts` is the only file that calls the backend. Panels receive their data as props and format it with the pure functions in `format.ts`.
 

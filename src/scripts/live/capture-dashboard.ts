@@ -10,7 +10,7 @@
  *   bun src/scripts/live/capture-dashboard.ts
  *
  * Env:
- *   DASHBOARD_URL  default http://localhost:3000
+ *   DASHBOARD_URL  default http://localhost:4000
  *   SHOT_OUT       default docs/screenshots/dashboard.png
  *   SHOT_WIDTH     viewport width in CSS px, default 1920
  *   SHOT_SETTLE_MS wait after load so every 1 s poll has data, default 8000
@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync }
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-const URL = process.env["DASHBOARD_URL"] ?? "http://localhost:3000";
+const URL = process.env["DASHBOARD_URL"] ?? "http://localhost:4000";
 const OUT = process.env["SHOT_OUT"] ?? "docs/screenshots/dashboard.png";
 const WIDTH = Number(process.env["SHOT_WIDTH"] ?? 1920);
 const SETTLE_MS = Number(process.env["SHOT_SETTLE_MS"] ?? 8000);
