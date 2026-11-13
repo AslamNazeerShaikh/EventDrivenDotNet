@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 17:30 IST: the frontend is documented in code (comment-only, byte-identical bundle); run guide corrected on DataGap; PR #3 updated.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, ~17:00 IST: UI redesign in progress (Opus agent, uncommitted in src/frontend); ui-ux-pro-max skill and capture-dashboard.ts committed.
 
 ## 1. Where things are
 
@@ -129,7 +129,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** PR #2 is merged into development. PR #3 (feat/plant-demo → development: docs/05-run-and-operate.md, docs only) is open for the user to merge. Opencode's five side branches and their worktrees are deleted (all their commits are in feat/plant-demo; their review reports are kept in .superpowers/sdd/03-implementation-plan/opencode/). Docker is stopped with every volume kept; the plant was NOT paused at this stop, so the next start records one DataGap alarm per machine: start 20–30 min before presenting. To go live: docs/05-run-and-operate.md section 8. The demo is at 19:00 IST.
+3. **Right now:** UI redesign in progress. An agent is editing src/frontend (uncommitted) from the brief: single page, full width, Geist font, KPI strip, new panels (live throughput, gateways table, central side, alarm mix), professional and plain, no behaviour change, logic in src/derive.ts with tests. The RUNNING dashboard container still serves the old UI, so the demo is safe until it is rebuilt. If the redesign is incomplete or broken: git checkout -- src/frontend restores the old UI. To finish: bun fmt --no-script, src/scripts/build/test-frontend.sh, docker compose up -d --build dashboard, check by eye, then bun src/scripts/live/capture-dashboard.ts writes docs/screenshots/dashboard.png for the README, update docs/05-run-and-operate.md section 9 for the new panels, commit and push to feat/plant-demo (PR #3). The demo is at 19:00 IST.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
