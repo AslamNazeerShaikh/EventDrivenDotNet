@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 13:05 IST: Claude took over from opencode. R1–R4 merged into feat/plant-demo (fast-forward to `afb9bd9`); pre-demo hardening (H1) in progress.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 12:45 IST: Claude took over from opencode at 12:26. R1–R4 merged into feat/plant-demo (fast-forward to `afb9bd9`); pre-demo hardening (H1) in progress.
 
 ## 1. Where things are
 
@@ -122,7 +122,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** H1, pre-demo hardening (Claude, from 12:30 IST). Done: R1–R4 fast-forwarded into feat/plant-demo; 170 unit ×3, 19 integration and 47 frontend tests green; stack rebuilt (21 containers, each shop's active instance named on its tile). In progress: README, doc 00 §14 (failover step) and doc nits from opencode's final review; duplicate-row scan 30 s; drill.sh proof prints over; full drill rehearsal (central-down/up, kill-gateway, failover, lose-gateway-disk, kill-consumer, proof after each); Opus re-review of R1–R3 code. Then: fix what the re-review and rehearsal find, final rehearsal from 17:00 IST. The demo is at 19:00 IST.
+3. **Right now:** H1, pre-demo hardening (Claude, from 12:26 IST). Done: R1–R4 fast-forwarded into feat/plant-demo and pushed; build 0 warnings, 170 unit, 19 integration, 47 frontend tests green; stack rebuilt (21 containers, each shop tile names its active instance); README and doc 00 §14 describe the pairs and the failover step; duplicate-row scan fixed (6 s at 16 M rows; live proof PASS 16,062,300 = 16,062,300, gaps 0, over 0, duplicate rows 0). In progress: full drill rehearsal (central-down/up running, then kill-gateway, failover, lose-gateway-disk, kill-consumer, proof after each); Opus re-review of R1–R3 code (read-only). Then: fix what they find, final rehearsal from 17:00 IST. The demo is at 19:00 IST.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
