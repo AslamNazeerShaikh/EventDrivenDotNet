@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 16:55 IST: doc 05 gains 'Alarms in detail' (machine catalog, the 7 alarm kinds with signal limits and severity, where alarms come from, what Inject alarm does step by step, the rules, examples, where to see them).
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 17:05 IST: PR #2 merged into development (at ee40a7a); PR #3 (the run and operate guide, docs only) open. Branches cleaned up: only main, development and feat/plant-demo remain. Docker stopped.
 
 ## 1. Where things are
 
@@ -128,7 +128,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** Ready for the demo at 19:00 IST. The stack is stopped with the plant paused and every volume kept. To go live, follow docs/05-run-and-operate.md section 8: open -a Docker; cd src/deployment && docker compose up -d --wait; scripts/drill.sh resume; then src/scripts/live/rehearse.sh 120. PR #2 (feat/plant-demo → development) is open and mergeable.
+3. **Right now:** PR #2 is merged into development. PR #3 (feat/plant-demo → development: docs/05-run-and-operate.md, docs only) is open for the user to merge. Opencode's five side branches and their worktrees are deleted (all their commits are in feat/plant-demo; their review reports are kept in .superpowers/sdd/03-implementation-plan/opencode/). Docker is stopped with every volume kept; the plant was NOT paused at this stop, so the next start records one DataGap alarm per machine: start 20–30 min before presenting. To go live: docs/05-run-and-operate.md section 8. The demo is at 19:00 IST.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;
