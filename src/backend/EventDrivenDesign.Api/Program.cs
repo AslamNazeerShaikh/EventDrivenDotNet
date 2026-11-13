@@ -94,8 +94,10 @@ app.MapGet(
         }
         catch (Exception) when (!ct.IsCancellationRequested) { }
         long? duplicateRows = null;
+        // The scan reads every row (16 M after a day: about 6 s), so it gets 60 s; it runs only on demand or when drained.
         if (full == true)
-            duplicateRows = (await Db(queries.DuplicateRowsAsync, ct)) is { IsSuccess: true } r
+            duplicateRows = (await Db(queries.DuplicateRowsAsync, ct, TimeSpan.FromSeconds(60)))
+                is { IsSuccess: true } r
                 ? r.Value
                 : null;
         return Results.Json(
@@ -185,10 +187,14 @@ app.Run();
 static IResult Failure(Error e) => Result.Failure(e).ToHttpResult();
 
 // A query against the central database: bounded by a timeout, and a down database is a 503, not a 500.
-static async Task<Result<T>> Db<T>(Func<CancellationToken, Task<T>> query, CancellationToken ct)
+static async Task<Result<T>> Db<T>(
+    Func<CancellationToken, Task<T>> query,
+    CancellationToken ct,
+    TimeSpan? timeout = null
+)
 {
     using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    cts.CancelAfter(TimeSpan.FromSeconds(2));
+    cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(2));
     try
     {
         return await query(cts.Token);

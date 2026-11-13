@@ -59,27 +59,34 @@ for g in json.load(sys.stdin)["gateways"]:
 }
 
 proof() {
-  run curl -fsS --max-time 10 -X POST "$API/plant/pause"; echo
+  # An instance still starting (after failover or lose-gateway-disk) answers 503; the loop re-sends the pause.
+  run curl -fsS --max-time 10 -X POST "$API/plant/pause" || true; echo
   local deadline=$((SECONDS + PROOF_TIMEOUT)) json="" drained=false
-  printf '▶ curl -fsS --max-time 5 %s/reconciliation?full=true  (every 2 s, up to %s s, until drained)\n' "$API" "$PROOF_TIMEOUT"
+  printf '▶ curl -fsS --max-time 5 %s/reconciliation  (every 2 s, up to %s s, until drained)\n' "$API" "$PROOF_TIMEOUT"
   while ((SECONDS < deadline)); do
     # re-send the pause at the top of every poll: an instance that restarted during the proof is paused before the next verdict.
     # A failed send is a retry, not fatal.
     curl -fsS --max-time 10 -X POST "$API/plant/pause" > /dev/null 2>&1 || true
-    if json=$(curl -fsS --max-time 5 "$API/reconciliation?full=true" 2>/dev/null); then
+    if json=$(curl -fsS --max-time 5 "$API/reconciliation" 2>/dev/null); then
       drained=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["drained"]).lower())' <<<"$json" 2>/dev/null) || drained=false
       [[ $drained == true ]] && break
     fi
     sleep 2
   done
   if [[ -z $json ]]; then echo "proof: no answer from $API/reconciliation" >&2; return 3; fi
+  # Drained: one full check, which also counts duplicate rows across the whole table (up to 60 s).
+  if [[ $drained == true ]]; then
+    printf '▶ curl -fsS --max-time 70 %s/reconciliation?full=true\n' "$API"
+    json=$(curl -fsS --max-time 70 "$API/reconciliation?full=true") || { echo "proof: the full check did not answer" >&2; return 3; }
+  fi
   python3 -c '
 import json, sys
 r = json.load(sys.stdin)
 for label, key in [("generated", "generated"), ("stored", "stored"), ("missing", "missing"),
-                   ("gaps", "gaps"), ("duplicate rows", "duplicateRows"),
+                   ("gaps", "gaps"), ("over", "over"), ("duplicate rows", "duplicateRows"),
                    ("duplicates absorbed", "duplicatesAbsorbed"), ("verdict", "verdict")]:
-    print(f"{label:>20}: {r[key]}")
+    v = "not checked" if r[key] is None else r[key]
+    print(f"{label:>20}: {v}")
 ' <<<"$json"
   if [[ $drained != true ]]; then echo "proof: still not drained after ${PROOF_TIMEOUT}s" >&2; return 3; fi
   [[ $(python3 -c 'import json,sys; print(json.load(sys.stdin)["verdict"])' <<<"$json") == PASS ]]
