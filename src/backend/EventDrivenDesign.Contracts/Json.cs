@@ -34,4 +34,5 @@ public static class Json
 [JsonSerializable(typeof(Chart))]
 [JsonSerializable(typeof(AlarmView))]
 [JsonSerializable(typeof(IReadOnlyList<AlarmView>))]
+[JsonSerializable(typeof(ContainersView))]
 internal sealed partial class EventDrivenDesignJsonContext : JsonSerializerContext;

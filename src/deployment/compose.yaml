@@ -59,6 +59,9 @@ x-api: &api
       condition: service_healthy
     central-db:
       condition: service_healthy
+  # Demo container panel only: read-only GET calls to the engine. Production would use cAdvisor or Prometheus.
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
   mem_limit: 256m
   memswap_limit: 256m
   restart: on-failure

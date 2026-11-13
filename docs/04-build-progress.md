@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, ~17:05 IST: dashboard redesigned (Geist, full width, 5 new panels), verified live, screenshot in README, pushed to PR #3.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, 17:50 IST: Containers panel live (GET /api/containers via the read-only Docker socket); 193 unit + 19 integration + 108 frontend tests pass; pushed to PR #3.
 
 ## 1. Where things are
 

@@ -18,6 +18,8 @@
 import {
   ALARM_KINDS,
   type AlarmView,
+  type ContainerPort,
+  type ContainerView,
   type Overview,
   type Reconciliation,
   type ServiceHealth,
@@ -378,3 +380,182 @@ export const utcTime = (t: string | number): string =>
  */
 export const newestText = (t: string | null, nowMs: number): string =>
   t === null ? "no data" : agoText(t, nowMs);
+
+/**
+ * Formats a size in bytes, in binary units (1 KB = 1024 B), with one decimal place above bytes.
+ *
+ * @param n - The size in bytes, or `null` when unknown.
+ * @returns Text such as "512 B", "1.5 KB", "653.0 MB" or "2.3 GB"; "—" for `null`.
+ */
+export function formatBytes(n: number | null): string {
+  if (n === null) return "—";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"] as const;
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
+
+/**
+ * The fill of a usage bar, in percent.
+ *
+ * @param used - The value, or `null`.
+ * @param limit - The value at a full bar, or `null`.
+ * @returns `used / limit × 100`, clamped to 0–100; 0 when either is missing or the limit is 0.
+ */
+export function usagePercent(
+  used: number | null,
+  limit: number | null,
+): number {
+  if (used === null || !limit) return 0;
+  return Math.min(100, Math.max(0, (used / limit) * 100));
+}
+
+/**
+ * The state and health of a container as a status text.
+ *
+ * @remarks
+ * Running is green, amber while its health check is starting, red when unhealthy. A container that
+ * exited with code 0 finished its job (like `plant-topics`), so it is neutral grey; any other exit is red.
+ *
+ * @param c - The container.
+ * @returns Text such as "running, healthy" or "exited 0", with its tone.
+ */
+export function containerStatus(c: ContainerView): Status {
+  if (c.state === "running") {
+    const text = c.health ? `running, ${c.health}` : "running";
+    const tone: Tone =
+      c.health === "unhealthy"
+        ? "bad"
+        : c.health === "starting"
+          ? "warn"
+          : "ok";
+    return { text, tone };
+  }
+  const exit = /^Exited \((\d+)\)/.exec(c.status);
+  if (exit) {
+    const code = exit[1];
+    return { text: `exited ${code}`, tone: code === "0" ? "idle" : "bad" };
+  }
+  return { text: c.state, tone: "warn" };
+}
+
+/**
+ * How long a running container has been up, from Docker's status text ("Up 5 minutes (healthy)").
+ *
+ * @param c - The container.
+ * @returns Text such as "5 minutes", or "—" when it is not running.
+ */
+export function uptimeText(c: ContainerView): string {
+  const up = /^Up (.+?)(?: \(.*\))?$/.exec(c.status);
+  return c.state === "running" && up?.[1] ? up[1] : "—";
+}
+
+/**
+ * A port as text: `host→container/protocol`, or `container/protocol` when it is not published.
+ *
+ * @param p - The port.
+ * @returns Text such as "3000→80/tcp" or "9092/tcp".
+ */
+export const portText = (p: ContainerPort): string =>
+  p.public === null
+    ? `${p.private}/${p.type}`
+    : `${p.public}→${p.private}/${p.type}`;
+
+/** The containers of one data-flow tier. */
+export interface TierGroup {
+  /** The tier name, such as "Edge gateways". */
+  tier: string;
+  /** Its place in the data flow, 1 (plant) to 8 (other). */
+  order: number;
+  /** Its containers, sorted by name. */
+  containers: ContainerView[];
+  /** Green when every container is fine (running and not unhealthy or starting, or finished cleanly), amber otherwise. */
+  tone: Tone;
+}
+
+/**
+ * Groups containers by tier, in data-flow order.
+ *
+ * @param containers - The containers, in any order.
+ * @returns One group per tier, sorted by `tierOrder`; containers sorted by name inside each.
+ */
+export function groupByTier(containers: readonly ContainerView[]): TierGroup[] {
+  const groups = new Map<string, TierGroup>();
+  for (const c of [...containers].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )) {
+    const g = groups.get(c.tier) ?? {
+      tier: c.tier,
+      order: c.tierOrder,
+      containers: [],
+      tone: "ok",
+    };
+    g.containers.push(c);
+    const t = containerStatus(c).tone;
+    if (t !== "ok" && t !== "idle") g.tone = "warn";
+    groups.set(c.tier, g);
+  }
+  return [...groups.values()].sort((a, b) => a.order - b.order);
+}
+
+/** The figures of the containers summary line. */
+export interface ContainerTotals {
+  /** Containers in the `running` state. */
+  running: number;
+  /** All containers of the project. */
+  total: number;
+  /** The sum of CPU %, in percent of one core. */
+  cpuPercent: number;
+  /** The sum of memory used, in bytes. */
+  memoryUsedBytes: number;
+  /** The sum of the memory limits, in bytes. */
+  memoryLimitBytes: number;
+  /** The sum of the writable layers, in bytes. */
+  writableBytes: number;
+  /** The sum of the volumes, each volume counted once, in bytes. */
+  volumeBytes: number;
+  /** The sum of the images, each image name counted once, in bytes. */
+  imageBytes: number;
+  /** Writable layers plus volumes plus images. */
+  diskBytes: number;
+}
+
+/**
+ * Sums the containers for the summary line. Unknown values count as 0.
+ *
+ * @param containers - The containers.
+ * @returns The totals; volumes and images shared by several containers are counted once.
+ */
+export function containerTotals(
+  containers: readonly ContainerView[],
+): ContainerTotals {
+  const sum = (f: (c: ContainerView) => number | null) =>
+    containers.reduce((acc, c) => acc + (f(c) ?? 0), 0);
+  const volumes = new Map<string, number>();
+  const images = new Map<string, number>();
+  for (const c of containers) {
+    for (const v of c.volumes) volumes.set(v.name, v.bytes ?? 0);
+    images.set(c.image, c.imageBytes ?? 0);
+  }
+  const total = (m: Map<string, number>) =>
+    [...m.values()].reduce((a, b) => a + b, 0);
+  const writableBytes = sum((c) => c.writableBytes);
+  const volumeBytes = total(volumes);
+  const imageBytes = total(images);
+  return {
+    running: containers.filter((c) => c.state === "running").length,
+    total: containers.length,
+    cpuPercent: sum((c) => c.cpuPercent),
+    memoryUsedBytes: sum((c) => c.memoryUsedBytes),
+    memoryLimitBytes: sum((c) => c.memoryLimitBytes),
+    writableBytes,
+    volumeBytes,
+    imageBytes,
+    diskBytes: writableBytes + volumeBytes + imageBytes,
+  };
+}

@@ -10,11 +10,24 @@
  * @module
  */
 import { describe, expect, test } from "bun:test";
-import type { AlarmView, GatewayTile, Overview, Reconciliation } from "./api";
+import type {
+  AlarmView,
+  ContainerView,
+  GatewayTile,
+  Overview,
+  Reconciliation,
+} from "./api";
 import {
   addSample,
   alarmMix,
   apiState,
+  containerStatus,
+  containerTotals,
+  formatBytes,
+  groupByTier,
+  portText,
+  uptimeText,
+  usagePercent,
   drainStatus,
   kpis,
   newestText,
@@ -449,4 +462,191 @@ describe("newestText", () => {
   test("null is no data", () => expect(newestText(null, now)).toBe("no data"));
   test("a time is its age", () =>
     expect(newestText("2026-11-12T11:59:57Z", now)).toBe("3 s ago"));
+});
+
+/** A running, healthy container; each test overrides the fields it is about. */
+const box = (o: Partial<ContainerView> = {}): ContainerView => ({
+  name: "edd-api-1-1",
+  service: "api-1",
+  tier: "Control room",
+  tierOrder: 7,
+  state: "running",
+  health: "healthy",
+  status: "Up 5 minutes (healthy)",
+  image: "edd-api",
+  imageBytes: 1000,
+  ports: [],
+  cpuPercent: 10,
+  memoryUsedBytes: 100,
+  memoryLimitBytes: 400,
+  netRxBytes: 1,
+  netTxBytes: 2,
+  blockReadBytes: 3,
+  blockWriteBytes: 4,
+  writableBytes: 50,
+  volumes: [],
+  startedAt: null,
+  ...o,
+});
+
+// formatBytes: sizes in B, KB, MB and GB, one decimal place above bytes.
+describe("formatBytes", () => {
+  test("null is a dash", () => expect(formatBytes(null)).toBe("—"));
+  test("bytes", () => expect(formatBytes(512)).toBe("512 B"));
+  test("kilobytes", () => expect(formatBytes(1536)).toBe("1.5 KB"));
+  test("megabytes", () => expect(formatBytes(5 * 1024 ** 2)).toBe("5.0 MB"));
+  test("gigabytes", () => expect(formatBytes(2.25 * 1024 ** 3)).toBe("2.3 GB"));
+});
+
+// usagePercent: the width of a usage bar, clamped to 0–100.
+describe("usagePercent", () => {
+  test("a share", () => expect(usagePercent(25, 100)).toBe(25));
+  test("over the limit is 100", () => expect(usagePercent(150, 100)).toBe(100));
+  test("no limit is 0", () => expect(usagePercent(5, null)).toBe(0));
+  test("no value is 0", () => expect(usagePercent(null, 100)).toBe(0));
+});
+
+// groupByTier: tiers in data-flow order, containers by name inside each.
+describe("groupByTier", () => {
+  test("orders tiers and names", () => {
+    const groups = groupByTier([
+      box({ name: "b", tier: "Control room", tierOrder: 7 }),
+      box({ name: "z", tier: "Edge gateways", tierOrder: 1 }),
+      box({ name: "a", tier: "Control room", tierOrder: 7 }),
+    ]);
+    expect(
+      groups.map((g) => [g.tier, g.containers.map((c) => c.name)]),
+    ).toEqual([
+      ["Edge gateways", ["z"]],
+      ["Control room", ["a", "b"]],
+    ]);
+  });
+  test("a tier is green when all its containers are fine", () =>
+    expect(groupByTier([box()])[0]?.tone).toBe("ok"));
+  test("a finished one-shot job does not turn its tier amber", () =>
+    expect(
+      groupByTier([
+        box(),
+        box({ state: "exited", health: null, status: "Exited (0) 1 hour ago" }),
+      ])[0]?.tone,
+    ).toBe("ok"));
+  test("an unhealthy container turns its tier amber", () =>
+    expect(groupByTier([box(), box({ health: "unhealthy" })])[0]?.tone).toBe(
+      "warn",
+    ));
+});
+
+// containerStatus: the state and health text with its colour.
+describe("containerStatus", () => {
+  test("running and healthy", () =>
+    expect(containerStatus(box())).toEqual({
+      text: "running, healthy",
+      tone: "ok",
+    }));
+  test("running without a health check", () =>
+    expect(containerStatus(box({ health: null }))).toEqual({
+      text: "running",
+      tone: "ok",
+    }));
+  test("starting", () =>
+    expect(containerStatus(box({ health: "starting" }))).toEqual({
+      text: "running, starting",
+      tone: "warn",
+    }));
+  test("unhealthy", () =>
+    expect(containerStatus(box({ health: "unhealthy" }))).toEqual({
+      text: "running, unhealthy",
+      tone: "bad",
+    }));
+  test("exited cleanly", () =>
+    expect(
+      containerStatus(
+        box({
+          state: "exited",
+          health: null,
+          status: "Exited (0) 2 hours ago",
+        }),
+      ),
+    ).toEqual({
+      text: "exited 0",
+      tone: "idle",
+    }));
+  test("exited with an error", () =>
+    expect(
+      containerStatus(
+        box({
+          state: "exited",
+          health: null,
+          status: "Exited (137) 1 minute ago",
+        }),
+      ),
+    ).toEqual({
+      text: "exited 137",
+      tone: "bad",
+    }));
+  test("restarting", () =>
+    expect(
+      containerStatus(
+        box({
+          state: "restarting",
+          health: null,
+          status: "Restarting (1) 2 seconds ago",
+        }),
+      ),
+    ).toEqual({
+      text: "restarting",
+      tone: "warn",
+    }));
+});
+
+// uptimeText: how long a running container has been up, from Docker's status text.
+describe("uptimeText", () => {
+  test("running", () => expect(uptimeText(box())).toBe("5 minutes"));
+  test("not running", () =>
+    expect(
+      uptimeText(box({ state: "exited", status: "Exited (0) 2 hours ago" })),
+    ).toBe("—"));
+});
+
+// portText: host→container/protocol, or container/protocol when not published.
+describe("portText", () => {
+  test("published", () =>
+    expect(portText({ private: 8080, public: 3000, type: "tcp" })).toBe(
+      "3000→8080/tcp",
+    ));
+  test("not published", () =>
+    expect(portText({ private: 9092, public: null, type: "tcp" })).toBe(
+      "9092/tcp",
+    ));
+});
+
+// containerTotals: the summary line.
+describe("containerTotals", () => {
+  test("sums usage and counts disk once per volume and image", () => {
+    const vol = { name: "v", destination: "/d", bytes: 300 };
+    expect(
+      containerTotals([
+        box({ volumes: [vol] }),
+        box({ volumes: [vol], cpuPercent: 5 }),
+        box({
+          state: "exited",
+          cpuPercent: null,
+          memoryUsedBytes: null,
+          memoryLimitBytes: null,
+          image: "other",
+          imageBytes: 7,
+        }),
+      ]),
+    ).toEqual({
+      running: 2,
+      total: 3,
+      cpuPercent: 15,
+      memoryUsedBytes: 200,
+      memoryLimitBytes: 800,
+      writableBytes: 150,
+      volumeBytes: 300,
+      imageBytes: 1007,
+      diskBytes: 1457,
+    });
+  });
 });

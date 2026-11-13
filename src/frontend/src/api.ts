@@ -317,6 +317,106 @@ export interface AlarmView {
 }
 
 /**
+ * A port of a container: `private` inside the container, `public` on the host when published.
+ *
+ * @see ContainerPort in ApiModels.cs
+ */
+export interface ContainerPort {
+  /** The port inside the container, such as 8080. */
+  private: number;
+  /** The host port it is published on, or `null` when it is not published. */
+  public: number | null;
+  /** The protocol, `tcp` or `udp`. */
+  type: string;
+}
+
+/**
+ * A named Docker volume mounted into a container.
+ *
+ * @see ContainerVolume in ApiModels.cs
+ */
+export interface ContainerVolume {
+  /** The volume name, such as `edd_central-db-data`. */
+  name: string;
+  /** Where it is mounted inside the container. */
+  destination: string;
+  /** Its size on disk in bytes, or `null` until the API has read `/system/df` (every 30 s). */
+  bytes: number | null;
+}
+
+/**
+ * One container of the Compose project, as the Docker Engine reports it.
+ *
+ * @remarks
+ * The usage fields are `null` for a container that is not running, and `cpuPercent` is also `null` on
+ * the first sample after the API starts, because CPU % needs two samples.
+ *
+ * @see ContainerView in ApiModels.cs
+ */
+export interface ContainerView {
+  /** The container name, such as `edd-gateway-prs-a-1`. */
+  name: string;
+  /** The Compose service, such as `gateway-prs-a`. */
+  service: string;
+  /** The data-flow tier, such as `Edge gateways`. */
+  tier: string;
+  /** The tier's place in the data flow, 1 (plant) to 8 (other). */
+  tierOrder: number;
+  /** Docker's state, such as `running` or `exited`. */
+  state: string;
+  /** `healthy`, `unhealthy` or `starting`, or `null` when the container has no health check. */
+  health: string | null;
+  /** Docker's status text, such as `Up 5 minutes (healthy)` or `Exited (0) 2 hours ago`. */
+  status: string;
+  /** The image name. */
+  image: string;
+  /** The image size in bytes, or `null` until known. */
+  imageBytes: number | null;
+  /** The ports, one entry per private port and protocol. */
+  ports: ContainerPort[];
+  /** CPU use in percent of one core (can pass 100 on several cores). */
+  cpuPercent: number | null;
+  /** Memory used, without the reclaimable file cache, in bytes. */
+  memoryUsedBytes: number | null;
+  /** The memory limit in bytes (the host memory when the container has no limit). */
+  memoryLimitBytes: number | null;
+  /** Bytes received over the network since the container started. */
+  netRxBytes: number | null;
+  /** Bytes sent over the network since the container started. */
+  netTxBytes: number | null;
+  /** Bytes read from block devices since the container started. */
+  blockReadBytes: number | null;
+  /** Bytes written to block devices since the container started. */
+  blockWriteBytes: number | null;
+  /** The size of the container's writable layer in bytes, or `null` until known. */
+  writableBytes: number | null;
+  /** The named volumes mounted into the container. */
+  volumes: ContainerVolume[];
+  /** When the container started, as an ISO-8601 UTC string, or `null` (the API does not read it yet). */
+  startedAt: string | null;
+}
+
+/**
+ * The project's containers, from `GET /api/containers`.
+ *
+ * @remarks
+ * When the API cannot read the Docker Engine, `available` is false, `reason` says why and
+ * `containers` is empty. The rest of the page does not depend on it.
+ *
+ * @see ContainersView in ApiModels.cs
+ */
+export interface ContainersView {
+  /** When the API took this view, as an ISO-8601 UTC string. */
+  at: string;
+  /** False when the Docker Engine could not be read. */
+  available: boolean;
+  /** Why it could not be read, or `null`. */
+  reason: string | null;
+  /** Every container of the project, running or not. */
+  containers: ContainerView[];
+}
+
+/**
  * An error answered by the API, built from its RFC 9457 `application/problem+json` body.
  *
  * @remarks
@@ -591,3 +691,22 @@ export const resume = () => post("/api/plant/resume");
  */
 export const injectFault = (machineId: string, kind: AlarmKind) =>
   post(`/api/machines/${encodeURIComponent(machineId)}/faults`, { kind });
+
+/**
+ * Polls the project's containers every 5 seconds.
+ *
+ * @remarks
+ * The API refreshes its own view every 5 s, so polling faster would only repeat it.
+ * `retry: false` like the other reads: the next tick is the retry.
+ *
+ * @returns The React Query result; `data` is a `ContainersView` once the first call succeeds.
+ * @see GET /api/containers in Program.cs
+ */
+export const useContainers = () =>
+  useQuery({
+    queryKey: ["containers"],
+    queryFn: () => get<ContainersView>("/api/containers"),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+    retry: false,
+  });

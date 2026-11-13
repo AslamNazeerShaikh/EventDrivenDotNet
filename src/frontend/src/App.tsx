@@ -9,7 +9,7 @@
  *
  * The default export is the `App` component. It also holds two private helpers, `note` and `Slot`.
  * It relates to the whole read side of the API: `/api/overview`, `/api/reconciliation`,
- * `/api/chart` and `/api/alarms` (see `Program.cs` in `EventDrivenDesign.Api`).
+ * `/api/chart`, `/api/alarms` and `/api/containers` (see `Program.cs` in `EventDrivenDesign.Api`).
  *
  * @module
  */
@@ -18,6 +18,7 @@ import {
   ApiError,
   useAlarms,
   useChart,
+  useContainers,
   useFullCheck,
   useOverview,
   useReconciliation,
@@ -36,6 +37,7 @@ import { AlarmMixPanel } from "./panels/AlarmMixPanel";
 import { AlarmsPanel } from "./panels/AlarmsPanel";
 import { BuffersLag } from "./panels/BuffersLag";
 import { CentralSide } from "./panels/CentralSide";
+import { ContainersPanel } from "./panels/ContainersPanel";
 import { GatewaysTable } from "./panels/GatewaysTable";
 import { KpiStrip } from "./panels/KpiStrip";
 import { PipelineStrip } from "./panels/PipelineStrip";
@@ -96,7 +98,7 @@ function Slot({
 
 /**
  * The whole page: a sticky header with the plant and API status, an error banner when the API is
- * unreachable, the KPI strip, the pipeline strip, and three rows of panels.
+ * unreachable, the KPI strip, the pipeline strip, the full-width containers panel, and three rows of panels.
  *
  * @remarks
  * It takes no props. The page uses the full width. The panel grid has one column on phones, two
@@ -113,6 +115,8 @@ export default function App() {
   const proof = useReconciliation();
   const chart = useChart();
   const alarms = useAlarms();
+  // The project's containers, polled every 5 s (the API's own refresh rate).
+  const containers = useContainers();
   // The full duplicate check; it starts itself from the light proof once the plant is paused and drained.
   const full = useFullCheck(proof.data);
   // Local clock that ticks every second, so "N s ago" keeps counting when no data arrives.
@@ -211,6 +215,9 @@ export default function App() {
         <ErrorBoundary label="Pipeline" resetKey={overview.dataUpdatedAt}>
           <PipelineStrip overview={overview.data} nowMs={nowMs} />
         </ErrorBoundary>
+        <Slot span="" label="Containers" resetKey={containers.dataUpdatedAt}>
+          <ContainersPanel view={containers.data} note={note(containers)} />
+        </Slot>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
           <Slot
             span="xl:col-span-4"
