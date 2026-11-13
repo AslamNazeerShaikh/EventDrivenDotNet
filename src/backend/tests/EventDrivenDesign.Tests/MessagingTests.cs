@@ -34,6 +34,7 @@ public class MessagingTests
         c.GroupInstanceId.Should().Be("gateway-bdy-a");
         c.SessionTimeoutMs.Should().Be(6000);
         c.HeartbeatIntervalMs.Should().Be(2000);
+        c.ReconnectBackoffMaxMs.Should().Be(1000); // back inside the 6 s session after a plant outage
         c.PartitionAssignmentStrategy.Should().Be(PartitionAssignmentStrategy.CooperativeSticky);
         c.EnableAutoCommit.Should().BeFalse();
         c.AutoOffsetReset.Should().Be(AutoOffsetReset.Latest);

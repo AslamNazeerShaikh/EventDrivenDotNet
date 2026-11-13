@@ -125,7 +125,8 @@ failover() { # $1 SHOP (any case) — drill 9: kill the active instance; the sta
     # and the restarted container is running — it returns as the standby, with no second switch.
     if read -r inst type <<<"$(active_health "$shop" 2>/dev/null)" \
         && [[ $inst == "$other" && $type == Healthy ]] \
-        && [[ -n "$(docker compose ps --status running --quiet "$instance")" ]]; then
+        && docker run --rm --network edd_plant busybox wget -qO- "http://$instance:8080/metrics" 2>/dev/null \
+          | grep -q '"role":"standby"'; then
       printf '%s is back as the standby after %d s (no second switch: %s stays active)\n' "$instance" "$n" "$other"
       return 0
     fi

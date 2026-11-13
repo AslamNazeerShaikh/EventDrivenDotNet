@@ -129,8 +129,14 @@ public sealed class GatewayLease(
     private CancellationTokenSource? _termCts;
     private CancellationTokenSource? _senderCts;
 
-    /// <summary>From the assignment until a revocation; unchanged by a lost session.</summary>
+    /// <summary>
+    /// From the term's <see cref="MarkActive"/> (numbering reconciled and resumed) until a revocation; unchanged
+    /// by a lost session. Before that, /metrics would report the boot-time numbering as the shop's.
+    /// </summary>
     public bool IsActive { get; private set; }
+
+    /// <summary>Called by the term once its numbering is reconciled and resumed.</summary>
+    public void MarkActive() => IsActive = _termRunning;
 
     /// <summary>The gate the standby loop reconciles under; a term's reconcile runs under it too.</summary>
     public SemaphoreSlim StandbyGate => _gate;
@@ -302,7 +308,9 @@ public sealed class GatewayLease(
             "The lease session for {Instance} expired; the sender is flushing and the collector keeps writing",
             instanceId
         );
-        _senderCts?.Cancel(); // rule 7: cancel only the sender token
+        // Rule 7: cancel only the sender token. Off this thread: Cancel() would run the sender's flush (up to
+        // 20 s with the broker gone) inline, and librdkafka cannot rejoin until this handler returns.
+        _ = _senderCts?.CancelAsync();
     }
 
     private void ThrowIfTermFaulted()
@@ -329,7 +337,6 @@ public sealed class GatewayLease(
             _termCts = termCts;
             _senderCts = senderCts;
             _termRunning = true;
-            IsActive = true;
             log.LogInformation("The gateway {Instance} of shop {Shop} is active", instanceId, shop);
             _termTask = Task.Run(() => whileActive(termCts.Token, senderCts.Token));
         }

@@ -67,6 +67,7 @@ var whileActive = async (CancellationToken termToken, CancellationToken senderTo
 
     // 3. Resume numbering from the state on disk; the previous CollectorService has stopped by now.
     term.Collector!.Resume(term.Buffer!.LoadState());
+    lease.MarkActive(); // only now does /metrics report this instance's numbering as the shop's
 
     // 4. Construct the collector, start it (its first act is the backfill), then start the sender.
     var svc = new CollectorService(
@@ -114,10 +115,11 @@ var whileActive = async (CancellationToken termToken, CancellationToken senderTo
         fatal = e;
     }
 
-    using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    // No timeout: the start-up backfill ignores the stop token, and the next term's Resume or a standby
+    // reconcile must not run beside it. It is bounded by the history depth (60 k rows: about 2 s).
     try
     {
-        await svc.StopAsync(stopTimeout.Token);
+        await svc.StopAsync(CancellationToken.None);
     }
     catch (Exception e)
     {

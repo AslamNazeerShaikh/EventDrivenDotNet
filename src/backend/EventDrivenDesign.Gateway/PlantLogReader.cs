@@ -193,8 +193,12 @@ public static class PlantLogReader
                     foreach (var p in pending.ToList())
                         if (FetchPosition(consumer, topic, p) >= target[p])
                             pending.Remove(p);
-                    if (++idle >= 4) // 2 s quiet across the window: stop waiting on it
-                        pending.Clear();
+                    // 10 s quiet: retry the whole scan (ReconcileBufferAsync backs off). Giving up on the
+                    // window instead would return an older alarm seq, and central would drop the next alarms.
+                    if (++idle >= 20)
+                        throw new KafkaException(
+                            new Error(ErrorCode.Local_TimedOut, $"{topic}: no record for 10 s")
+                        );
                     continue;
                 }
 
@@ -229,7 +233,7 @@ public static class PlantLogReader
         }
         catch (KafkaException)
         {
-            return 0; // unknown is below every target; the idle break bounds the round instead
+            return 0; // unknown is below every target; the idle timeout retries the scan instead
         }
     }
 }

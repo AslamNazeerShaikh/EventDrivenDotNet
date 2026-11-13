@@ -55,6 +55,7 @@ public sealed class GatewayBuffer : IAsyncDisposable
           payload        BLOB    NOT NULL
         );
         CREATE INDEX IF NOT EXISTS ix_outbox_lane ON outbox (lane, id);
+        CREATE INDEX IF NOT EXISTS ix_outbox_machine ON outbox (machine_id, lane, seq);
         CREATE TABLE IF NOT EXISTS machine_state (
           machine_id          TEXT    PRIMARY KEY,
           last_seq            INTEGER NOT NULL,

@@ -31,6 +31,9 @@ public static class KafkaConfigs
             GroupInstanceId = instanceId,
             SessionTimeoutMs = 6000,
             HeartbeatIntervalMs = 2000,
+            // The broker restarts each static member's 6 s session when it reloads the group after an outage;
+            // librdkafka's default 10 s reconnect backoff would let the session expire and move the lease.
+            ReconnectBackoffMaxMs = 1000,
             PartitionAssignmentStrategy = PartitionAssignmentStrategy.CooperativeSticky,
             EnableAutoCommit = false,
             AutoOffsetReset = AutoOffsetReset.Latest,

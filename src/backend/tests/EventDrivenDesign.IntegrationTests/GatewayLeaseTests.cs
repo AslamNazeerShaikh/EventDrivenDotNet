@@ -227,7 +227,7 @@ public sealed class GatewayLeaseTests : IAsyncLifetime
     }
 
     private GatewayLease NewLease(string instance, GatewayBuffer buffer, LeaseHarness harness) =>
-        new(
+        harness.Lease = new(
             _kafka.GetBootstrapAddress(),
             "TST",
             instance,
@@ -264,6 +264,7 @@ public sealed class GatewayLeaseTests : IAsyncLifetime
         private int _starts;
 
         public int Starts => Volatile.Read(ref _starts);
+        public GatewayLease? Lease { get; set; }
         public TaskCompletionSource SenderCancelled { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource TermCancelled { get; } =
@@ -274,6 +275,7 @@ public sealed class GatewayLeaseTests : IAsyncLifetime
             Interlocked.Increment(ref _starts);
             using var senderStop = senderToken.Register(() => SenderCancelled.TrySetResult());
             using var termStop = termToken.Register(() => TermCancelled.TrySetResult());
+            Lease!.MarkActive(); // as the real term does once its numbering is resumed
             try
             {
                 await Task.Delay(Timeout.Infinite, termToken);

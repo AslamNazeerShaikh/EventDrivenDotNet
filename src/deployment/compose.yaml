@@ -17,6 +17,7 @@ x-gateway: &gateway
   mem_limit: 256m
   memswap_limit: 256m
   restart: on-failure
+  stop_grace_period: 30s # a stop drains the sender (up to 10 s) after the collector stops (up to 10 s)
   networks: [plant]
 
 x-consumer: &consumer
