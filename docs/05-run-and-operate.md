@@ -300,7 +300,7 @@ Afterwards: `scripts/drill.sh resume`.
 | 2 | **Buffers and lag** | One row per shop: `SHOP · a` or `· b` (its active gateway), a bar for buffered rows, then `rows · oldest age`. Below: mirror lag, consumer lag, drain ETA | The bars grow while central or the plant broker is down, then empty. `(paused)` while paused; `(last seen)` if the gateway stopped answering. The drain ETA counts down after an outage |
 | 3 | **Readings by device time, 10 min** | Readings stored per 5 seconds of device time | Blue bars are settled; amber bars, after the watermark, are still filling. An outage shows as a hole that fills in as the backlog drains: readings are placed by when the machine produced them, not when they arrived |
 | 4 | **Proof** | Generated, Stored, Missing, Gaps, Duplicate rows, Duplicates absorbed, and the verdict | **PASS**: every generated reading is stored once. **WAIT**: not settled yet, so pause the plant and let every buffer and lag drain. **FAIL**: a reading is missing, out of sequence or duplicated. Duplicate rows comes from a full scan, run on the **Check duplicates** button and automatically at most every 10 s once paused and drained; it shows "Checking duplicates…" while running. Duplicates absorbed counts redeliveries the key rejected. **Per-machine table** expands all 500 machines |
-| 5 | **Alarms** | The latest alarms stored at central: time, machine, kind, severity, latency | Latency is the delay from the machine to central (0.0 s in steady state; higher during a drain). Below: **Machine id** + **Kind** + **Inject alarm** (kinds: Overheat, Vibration, Overload, EStop, LowBattery, OutOfBand), and **Pause** / **Resume** for all gateways. `Plant: running` or `paused` |
+| 5 | **Alarms** | The latest alarms stored at central: time, machine, kind, severity, latency | Latency is the delay from the machine to central (0.0 s in steady state; higher during a drain). Below: **Machine id** + **Kind** + **Inject alarm** (the list offers all 7 kinds; `DataGap` can only answer "does not apply", see Alarms in detail, rule 8), and **Pause** / **Resume** for all gateways. `Plant: running` or `paused` |
 
 ### Alarms in detail
 
@@ -369,6 +369,7 @@ Normal readings wander inside each signal's normal range (for example `vibration
 | 5 | Inject while central is down | The alarm waits in the gateway buffer and plant Kafka, then arrives as soon as central is back, ahead of the reading backlog | Alarms have their own lane, topic and consumer group |
 | 6 | Inject right after `central-up` | It can take about 40 s, because the store writers resume about 45 s after `central-up` | Inject once the drain ETA counts down, and it lands within seconds |
 | 7 | Inject while the plant is paused | No alarm until you resume: a paused machine produces nothing | Pause stops the simulated machines |
+| 8 | Pick `DataGap` in the kind list | An error: "DataGap does not apply to P1-…" | The list offers every alarm kind, but no signal raises `DataGap`: only a gateway coming back from a long outage records it |
 
 #### Combinations to try
 
@@ -407,4 +408,4 @@ Normal readings wander inside each signal's normal range (for example `vibration
 | 10 | Port 3000 in use | Another program holds it | Stop that program, or change `3000:80` in `compose.yaml` |
 | 11 | The database looks overloaded | Usually only big: about 0.5 GB and 1.8 M rows per hour | `docker stats --no-stream edd-central-db-1` (a few % CPU is normal) and the consumer lag in `api.sh overview`. See "Storage" in section 4 |
 | 12 | Docker disk filling up | The build cache (about 21 GB reclaimable) and data volumes growing | `docker system df`; `docker builder prune` frees the cache safely. Never delete only database rows (section 4) |
-| 13 | **Inject alarm** shows an error or nothing appears | The kind does not fit the machine type, the ID is wrong, the plant is paused, or central has just come back | See "Alarms in detail" (section 9), rules 2–7; for example Vibration works on `P1-MCH-C017`, not on `P1-BDY-W042` |
+| 13 | **Inject alarm** shows an error or nothing appears | The kind does not fit the machine type, the ID is wrong, the plant is paused, or central has just come back | See "Alarms in detail" (section 9), rules 2–8; for example Vibration works on `P1-MCH-C017`, not on `P1-BDY-W042` |
