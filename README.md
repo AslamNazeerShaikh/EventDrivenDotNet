@@ -4,6 +4,10 @@ Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 mach
 
 ![Plant to central: every container, port and data store](docs/diagrams/01-plant-to-central.svg)
 
+![The control-room dashboard, full page: header, KPI strip, pipeline, all 21 containers with CPU, memory, disk and ports, buffers, readings chart, live throughput, proof, gateways, Kafka and database, alarms and alarm mix](docs/screenshots/dashboard.png)
+
+The control room at <http://localhost:4000>, captured live at 1920 px with `bun src/scripts/live/capture-dashboard.ts`.
+
 | # | Document | What it holds |
 | --- | --- | --- |
 | 1 | [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md) | Build spec for the demo: containers, contracts, services, drills, tests, build plan |
@@ -167,9 +171,7 @@ Errors are values, not exceptions:
 
 ## Frontend codebase
 
-![The control-room dashboard: header, KPI strip, pipeline, buffers, readings chart, live throughput, proof, gateways, Kafka and database, alarms and alarm mix](docs/screenshots/dashboard.png)
-
-The control room at 1920 px, captured live with `bun src/scripts/live/capture-dashboard.ts`.
+The full-page dashboard screenshot is at the top of this README, after the architecture diagram.
 
 ![Frontend codebase: build and serve, the start chain from index.html to App, every component with its props, the data layer and the nginx routes](docs/diagrams/10-frontend-codebase.svg)
 
