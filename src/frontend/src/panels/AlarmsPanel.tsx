@@ -34,7 +34,10 @@ const time = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" });
 /** Tailwind classes shared by the Inject, Pause and Resume buttons. Disabled buttons are dimmed. */
 const btn =
-  "rounded border border-line bg-ink px-3 py-1.5 text-sm font-medium hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-md border border-line bg-raised px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:border-line-strong hover:bg-line disabled:cursor-not-allowed disabled:opacity-50";
+/** Tailwind classes shared by the machine id input and the kind select. */
+const field =
+  "rounded-md border border-line bg-ink px-2 py-1.5 transition-colors duration-150 hover:border-line-strong";
 
 /**
  * Turns an error from a command into one line of text.
@@ -95,32 +98,32 @@ export function AlarmsPanel({
   const failed = inject.error ?? pause.error ?? resume.error;
   return (
     <Panel title="Alarms" note={note}>
-      <div className="max-h-44 overflow-auto">
+      <div className="max-h-56 overflow-auto">
         {/* Three states: no data yet, no alarms, or the table. */}
         {!alarms ? (
           <p className="text-muted">Waiting for data…</p>
         ) : alarms.length === 0 ? (
           <p className="text-muted">No alarms at central yet.</p>
         ) : (
-          <table className="w-full min-w-[460px] whitespace-nowrap text-sm tabular-nums">
+          <table className="w-full min-w-[460px] whitespace-nowrap text-sm">
             <caption className="sr-only">
               Alarms stored at central, newest first
             </caption>
-            <thead className="sticky top-0 bg-panel text-left text-muted">
+            <thead className="sticky top-0 bg-panel text-left text-xs text-muted">
               <tr>
-                <th scope="col" className="py-1 pr-2">
+                <th scope="col" className="py-1.5 pr-2 font-medium">
                   Stored (UTC)
                 </th>
-                <th scope="col" className="pr-2">
+                <th scope="col" className="pr-2 font-medium">
                   Machine
                 </th>
-                <th scope="col" className="pr-2">
+                <th scope="col" className="pr-2 font-medium">
                   Kind
                 </th>
-                <th scope="col" className="pr-2">
+                <th scope="col" className="pr-2 font-medium">
                   Severity
                 </th>
-                <th scope="col" className="text-right">
+                <th scope="col" className="text-right font-medium">
                   Latency
                 </th>
               </tr>
@@ -133,7 +136,7 @@ export function AlarmsPanel({
                   key={`${a.machineId}-${a.alarmSeq}`}
                   className="border-t border-line"
                 >
-                  <td className="py-0.5 pr-2">{time(a.storedAt)}</td>
+                  <td className="py-1 pr-2 font-mono">{time(a.storedAt)}</td>
                   <td className="pr-2 font-mono">{a.machineId}</td>
                   <td className="pr-2">{a.kind}</td>
                   <td className="pr-2">{a.severity}</td>
@@ -157,7 +160,7 @@ export function AlarmsPanel({
             value={machineId}
             onChange={(e) => setMachineId(e.target.value)}
             required
-            className="w-44 rounded border border-line bg-ink px-2 py-1.5 font-mono"
+            className={`w-44 font-mono ${field}`}
           />
         </label>
         <label className="text-sm">
@@ -165,7 +168,7 @@ export function AlarmsPanel({
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as AlarmKind)}
-            className="rounded border border-line bg-ink px-2 py-1.5"
+            className={field}
           >
             {ALARM_KINDS.map((k) => (
               <option key={k}>{k}</option>
@@ -196,7 +199,7 @@ export function AlarmsPanel({
         >
           Resume
         </button>
-        <span className="text-sm text-slate-300">
+        <span className="text-sm text-fg/80">
           Plant:{" "}
           {paused === undefined ? "unknown" : paused ? "paused" : "running"}
         </span>
@@ -204,11 +207,11 @@ export function AlarmsPanel({
       {/* Result line. It is a polite live region so a screen reader announces it; the error is an alert. */}
       <div aria-live="polite" className="mt-2 min-h-5 text-sm">
         {failed ? (
-          <span role="alert" className="text-red-300">
+          <span role="alert" className="text-bad-fg">
             {errorText(failed)}
           </span>
         ) : inject.isSuccess ? (
-          <span className="text-green-300">
+          <span className="text-ok">
             Alarm accepted for {inject.variables.machineId}.
           </span>
         ) : null}

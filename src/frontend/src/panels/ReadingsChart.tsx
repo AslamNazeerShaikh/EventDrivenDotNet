@@ -86,18 +86,25 @@ export function ReadingsChart({
                 margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                 barCategoryGap={0}
               >
-                <CartesianGrid stroke="#2a3650" vertical={false} />
+                <CartesianGrid stroke="var(--color-line)" vertical={false} />
                 <XAxis
                   dataKey="bucketStart"
                   tickFormatter={clock}
-                  stroke="#9fb0cc"
+                  stroke="var(--color-muted)"
+                  tick={{ fontSize: 12 }}
                   minTickGap={48}
                 />
-                <YAxis stroke="#9fb0cc" width={48} tickFormatter={formatInt} />
+                <YAxis
+                  stroke="var(--color-muted)"
+                  tick={{ fontSize: 12 }}
+                  width={48}
+                  tickFormatter={formatInt}
+                />
                 <Tooltip
                   contentStyle={{
-                    background: "#121a2b",
-                    border: "1px solid #2a3650",
+                    background: "var(--color-panel)",
+                    border: "1px solid var(--color-line)",
+                    borderRadius: 6,
                   }}
                   labelFormatter={(l) => clock(String(l))}
                   formatter={(v) => [formatInt(Number(v)), "readings"]}
@@ -107,25 +114,29 @@ export function ReadingsChart({
                   <ReferenceArea
                     x1={firstProvisional}
                     x2={last}
-                    fill="#f5b942"
-                    fillOpacity={0.12}
+                    fill="var(--color-warn)"
+                    fillOpacity={0.1}
                   />
                 )}
                 <Bar dataKey="readings" isAnimationActive={false}>
                   {data.map((p) => (
                     <Cell
                       key={p.bucketStart}
-                      fill={p.provisional ? "#f5b942" : "#38bdf8"}
+                      fill={
+                        p.provisional
+                          ? "var(--color-warn)"
+                          : "var(--color-info)"
+                      }
                     />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-sm text-slate-300">
-            <span className="text-sky-300">Blue: settled.</span>{" "}
-            <span className="text-amber-300">Amber: provisional</span> (after
-            the watermark
+          <p className="mt-2 text-sm text-muted">
+            <span className="text-info">Blue: settled.</span>{" "}
+            <span className="text-warn">Amber: provisional</span> (after the
+            watermark
             {chart.watermark
               ? `, ${clock(chart.watermark)}`
               : ", not yet known"}

@@ -70,7 +70,7 @@ export class ErrorBoundary extends Component<Props, { failed: boolean }> {
     return (
       <p
         role="alert"
-        className="rounded border border-amber-400 bg-panel px-3 py-2 text-sm text-amber-300"
+        className="rounded-lg border border-warn bg-panel px-3 py-2 text-sm text-warn"
       >
         {this.props.label} could not be drawn. Retrying with the next update.
       </p>

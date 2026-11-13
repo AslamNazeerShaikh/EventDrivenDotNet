@@ -1,6 +1,6 @@
 # Build Progress and Handover
 
-> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, ~17:00 IST: UI redesign in progress (Opus agent, uncommitted in src/frontend); ui-ux-pro-max skill and capture-dashboard.ts committed.
+> Updated after every step of the build, so another agent (opencode, or Claude after a context compaction) can take over at any point. Last update: 13 November 2026, ~17:05 IST: dashboard redesigned (Geist, full width, 5 new panels), verified live, screenshot in README, pushed to PR #3.
 
 ## 1. Where things are
 
@@ -129,7 +129,7 @@ Production only, documented and not built (laptop memory): 3 brokers per site wi
 
 1. `git switch feat/plant-demo` and `git log --oneline` shows the commits above.
 2. Read this file, then the ledger in `.superpowers/sdd/03-implementation-plan/progress.md`. Trust the ledger and git over memory.
-3. **Right now:** UI redesign in progress. An agent is editing src/frontend (uncommitted) from the brief: single page, full width, Geist font, KPI strip, new panels (live throughput, gateways table, central side, alarm mix), professional and plain, no behaviour change, logic in src/derive.ts with tests. The RUNNING dashboard container still serves the old UI, so the demo is safe until it is rebuilt. If the redesign is incomplete or broken: git checkout -- src/frontend restores the old UI. To finish: bun fmt --no-script, src/scripts/build/test-frontend.sh, docker compose up -d --build dashboard, check by eye, then bun src/scripts/live/capture-dashboard.ts writes docs/screenshots/dashboard.png for the README, update docs/05-run-and-operate.md section 9 for the new panels, commit and push to feat/plant-demo (PR #3). The demo is at 19:00 IST.
+3. **Right now:** Ready for the demo at 19:00 IST. The dashboard redesign is done and live (the dashboard container runs it): single page, full width, Geist, KPI strip, live throughput, gateways table, Kafka, writers and database, alarm mix. Data logic unchanged (api.ts, format.ts untouched); 83 frontend tests pass; strict build clean. PR #3 (feat/plant-demo → development) is open for the user to merge. To go live: docs/05-run-and-operate.md section 8.
 4. Continue in the order in section 3. **Use the scripts in [`src/scripts/`](../src/scripts/README.md)** instead of retyping commands:
    - `sdd/sdd.sh brief N`, `review BASE HEAD` and `log "…"` for the build loop;
    - `build/test-backend.sh` and `build/test-frontend.sh` for tests;

@@ -18,31 +18,32 @@ import { formatInt, proofView } from "../format";
 import { Panel, Stat } from "./ui";
 
 /**
- * How each verdict is drawn: a symbol, the word, Tailwind colour classes, and a one-line hint.
+ * How each verdict is drawn: an outline icon, the word, Tailwind colour classes, and a one-line hint.
  *
  * @remarks
- * PASS is green, WAIT amber, FAIL red. The hints match the operator guide (docs/05-run-and-operate.md, section 9).
+ * PASS is green with a check mark, WAIT amber with a clock, FAIL red with a cross. `icon` is the SVG
+ * path drawn on a 24 by 24 grid. The hints match the operator guide (docs/05-run-and-operate.md, section 9).
  */
 const VERDICT: Record<
   Verdict,
-  { symbol: string; text: string; cls: string; hint: string }
+  { icon: string; text: string; cls: string; hint: string }
 > = {
   PASS: {
-    symbol: "✔",
+    icon: "M20 6 9 17l-5-5",
     text: "PASS",
-    cls: "border-green-500 text-green-300",
+    cls: "border-ok text-ok",
     hint: "Every generated reading is stored once.",
   },
   WAIT: {
-    symbol: "…",
+    icon: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5l3 2",
     text: "WAIT",
-    cls: "border-amber-500 text-amber-300",
+    cls: "border-warn text-warn",
     hint: "Not settled: pause the plant and let every buffer and lag drain.",
   },
   FAIL: {
-    symbol: "✖",
+    icon: "M18 6 6 18M6 6l12 12",
     text: "FAIL",
-    cls: "border-red-500 text-red-300",
+    cls: "border-bad text-bad-fg",
     hint: "A reading is missing, out of sequence or duplicated.",
   },
 };
@@ -51,9 +52,9 @@ const VERDICT: Record<
  * What is drawn for a verdict string that is not in `Verdict`, for example one sent by a newer API.
  */
 const UNKNOWN = {
-  symbol: "?",
+  icon: "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
   text: "UNKNOWN",
-  cls: "border-amber-500 text-amber-300",
+  cls: "border-warn text-warn",
   hint: "The API sent a verdict this page does not know.",
 };
 /**
@@ -151,16 +152,28 @@ export function ProofPanel({
         </dl>
         <div
           role="status"
+          aria-live="polite"
           aria-label={`Verdict ${v.text}`}
-          className={`rounded-lg border-2 px-5 py-3 text-center ${v.cls}`}
+          className={`rounded-lg border px-5 py-3 ${v.cls}`}
         >
-          <div className="text-3xl font-bold">
-            <span aria-hidden>{v.symbol} </span>
+          <div className="flex items-center gap-2 text-2xl font-semibold">
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d={v.icon} />
+            </svg>
             {v.text}
           </div>
         </div>
       </div>
-      <p className="mt-2 text-sm text-slate-300">
+      <p className="mt-3 text-sm text-fg/80">
         {v.hint} Plant {proof.paused ? "paused" : "running"};{" "}
         {proof.drained ? "drained" : "not drained"}.
       </p>
@@ -168,7 +181,7 @@ export function ProofPanel({
         type="button"
         onClick={full.check}
         disabled={full.pending}
-        className="mt-3 rounded border border-line bg-ink px-3 py-1.5 text-sm font-medium hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-3 rounded-md border border-line bg-raised px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:border-line-strong hover:bg-line disabled:cursor-not-allowed disabled:opacity-50"
       >
         {full.pending ? "Checking duplicates…" : "Check duplicates"}
       </button>
@@ -177,7 +190,7 @@ export function ProofPanel({
         plant is paused and drained.
       </p>
       <details className="mt-3" onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary className="cursor-pointer text-sm text-sky-300">
+        <summary className="cursor-pointer text-sm text-info">
           Per-machine table ({formatInt(proof.machines.length)} machines)
         </summary>
         {/* The rows are drawn only while the details are open. */}

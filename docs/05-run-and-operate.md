@@ -302,6 +302,17 @@ Afterwards: `scripts/drill.sh resume`.
 | 4 | **Proof** | Generated, Stored, Missing, Gaps, Duplicate rows, Duplicates absorbed, and the verdict | **PASS**: every generated reading is stored once. **WAIT**: not settled yet, so pause the plant and let every buffer and lag drain. **FAIL**: a reading is missing, out of sequence or duplicated. Duplicate rows comes from a full scan, run on the **Check duplicates** button and automatically at most every 10 s once paused and drained; it shows "Checking duplicates…" while running. Duplicates absorbed counts redeliveries the key rejected. **Per-machine table** expands all 500 machines |
 | 5 | **Alarms** | The latest alarms stored at central: time, machine, kind, severity, latency | Latency is the delay from the machine to central (0.0 s in steady state; higher during a drain). Below: **Machine id** + **Kind** + **Inject alarm** (the list offers all 7 kinds; `DataGap` can only answer "does not apply", see Alarms in detail, rule 8), and **Pause** / **Resume** for all gateways. `Plant: running` or `paused` |
 
+### Panels added in the redesign
+
+| # | Panel | What it shows |
+| --- | --- | --- |
+| 1 | **Header** (sticky) | Plant `Running`, `Paused` or `Unknown`; API connected or not; the last update time (UTC) and its age |
+| 2 | **KPI strip** | Eight cards: live rate, drain rate, rows stored, mirror lag (against the 10 s limit), consumer lag, drain ETA, duplicates absorbed, and the proof verdict with its reason |
+| 3 | **Live throughput, 3 min** | Live rate (solid) and drain rate (dashed) over the last 3 minutes, sampled once a second in the browser. It starts empty on each page load and stops while the API is unreachable |
+| 4 | **Gateways** | One row per shop: active instance (`a` or `b`), health, state, sent per second, buffered readings and alarms, oldest unsent age, generated count |
+| 5 | **Kafka, writers and database** | Plant and central Kafka (records, newest record's age), each store writer (inserted per second, received, inserted) with the consumer lag, and PostgreSQL (rows, freshness) |
+| 6 | **Alarm mix** | Counts by severity and by kind over the latest alarms stored at central (up to 50), with the latest and the maximum latency. After a restart, `DataGap` alarms raise the maximum latency; that is expected |
+
 ### Alarms in detail
 
 An alarm is the plant reporting that a machine signal crossed its safety limit: too hot, too much vibration, an emergency stop. Alarms travel on their own Kafka topic, `machine.alarms`, separate from the 500 readings per second. They have their own consumer group at central, `central-alarms`, and the gateway always sends them before readings. So an alarm never waits behind a backlog of readings.

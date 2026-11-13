@@ -199,53 +199,51 @@ export function PipelineStrip({
     );
   return (
     <Panel title="Plant to central">
-      <ol className="grid grid-cols-1 gap-2 min-[600px]:grid-cols-2 min-[900px]:grid-cols-4 min-[1300px]:grid-cols-7">
+      <ol className="grid grid-cols-1 gap-3 min-[600px]:grid-cols-2 min-[900px]:grid-cols-4 min-[1300px]:grid-cols-7">
         {stages(overview, nowMs).map((s) => {
           // Down when the stage says its rate is stale; otherwise when its own health is Down.
           const down = s.stale ?? (s.health !== null && isStale(s.health));
           return (
             <li
               key={s.name}
-              className={`rounded border bg-ink p-3 ${down ? "border-red-500" : "border-line"}`}
+              className={`rounded-md border bg-raised p-3 ${down ? "border-bad" : "border-line"}`}
             >
               <div className="mb-1 font-semibold">{s.name}</div>
               {/* A badge when the stage has a health; the plain label for Machines. */}
               {s.health ? (
                 <HealthBadge health={s.health} nowMs={nowMs} />
               ) : (
-                <span className="text-sm font-medium text-slate-300">
+                <span className="text-sm font-medium text-fg/80">
                   {s.fallbackLabel}
                 </span>
               )}
               {s.detail && (
-                <div className="text-sm text-red-300">{s.detail}</div>
+                <div className="text-sm text-bad-fg">{s.detail}</div>
               )}
               {s.rate !== null && (
-                <div
-                  className={`mt-2 tabular-nums ${down ? "text-slate-500" : ""}`}
-                >
+                <div className={`mt-2 ${down ? "text-muted" : ""}`}>
                   <span className="text-xl font-semibold">
                     {formatInt(s.rate)}
                   </span>{" "}
-                  {s.rateUnit}
+                  <span className="text-sm text-muted">{s.rateUnit}</span>
                 </div>
               )}
               {/* Warns that a grey number is not live. */}
               {down && s.rate !== null && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted">
                   last known rate, not live
                 </div>
               )}
               {s.backlog && (
                 <div
-                  className={`text-sm ${down ? "text-slate-500" : "text-slate-300"}`}
+                  className={`text-sm ${down ? "text-muted" : "text-fg/80"}`}
                 >
                   {s.backlog}
                 </div>
               )}
               {s.freshness && (
                 <div
-                  className={`text-sm ${down ? "text-slate-500" : "text-slate-300"}`}
+                  className={`text-sm ${down ? "text-muted" : "text-fg/80"}`}
                 >
                   {s.freshness}
                 </div>

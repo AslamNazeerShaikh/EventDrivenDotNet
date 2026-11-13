@@ -64,15 +64,15 @@ export function BuffersLag({ overview }: { overview: Overview | undefined }) {
                 aria-valuemin={0}
                 aria-valuemax={max}
                 aria-valuenow={depth(g)}
-                className="h-3 overflow-hidden rounded bg-ink"
+                className="h-2.5 overflow-hidden rounded-full bg-raised"
               >
                 <div
-                  className={`h-full ${stale ? "bg-slate-500" : "bg-sky-400"}`}
+                  className={`h-full rounded-full ${stale ? "bg-line-strong" : "bg-info"}`}
                   style={{ width: `${(depth(g) / max) * 100}%` }}
                 />
               </div>
               <span
-                className={`min-w-40 text-right text-sm tabular-nums ${stale ? "text-slate-500" : ""}`}
+                className={`min-w-40 text-right text-sm ${stale ? "text-muted" : ""}`}
               >
                 {formatInt(depth(g))} ·{" "}
                 {/* The API sends the oldest age in milliseconds; formatSeconds wants seconds. */}
