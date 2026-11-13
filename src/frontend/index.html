@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  index.html: the single page of the "Plant to central" control room.
+
+  Flow: the browser loads this file, then the module script below pulls in src/main.tsx, which
+  mounts the React app (App) into <div id="root">. Vite serves this file in development and
+  builds it into dist/ for the nginx dashboard container, which also forwards /api/* to the API.
+
+  The page has no content of its own: everything you see is drawn by React after the script runs.
+  Styles come from src/index.css, which main.tsx imports. The two links below load the Geist and
+  Geist Mono fonts from Google Fonts; with no network the page falls back to the system fonts.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Plant to central</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap"
+    />
+  </head>
+  <body>
+    <!-- React mounts here (main.tsx finds it by id "root"). -->
+    <div id="root"></div>
+    <!-- The only entry point. type="module" so Vite can bundle the imports. -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

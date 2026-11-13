@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant to central: every container, port and data store</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1840px; width: 100%; }
+    /* The SVG holds its readable width (min-width == the viewBox width); this
+       wrapper lets a narrow screen scroll the diagram instead of the page. */
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1840px; display: block; }
+    /* Paper has no scrollbar: release the scroller in print. Must follow the svg rule. */
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · detailed · as built for the demo, with production values</p>
+    <h1>Plant to central: every container, port and data store</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1840 2284" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="01-plant-to-central-title 01-plant-to-central-desc">
+        <title id="01-plant-to-central-title">Plant to central: every container, port and data store</title>
+        <desc id="01-plant-to-central-desc">Each shop&#x27;s 100 devices talk over RJ45 Ethernet, Wi-Fi, Bluetooth LE or serial to one plant-wide network per medium; a unified device interface normalises their frames and forwards them to five shop gateways, which buffer in SQLite and produce to plant Kafka; MirrorMaker 2 copies the plant topics over the WAN into central Kafka; two store-writer consumers insert into PostgreSQL under a unique (machine_id, seq) key; a control-room API and dashboard watch every stage; and a ledger lists who writes and reads each store, when and how.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+<!-- Zones -->
+<rect x="40" y="40" width="1344" height="1052" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<rect x="56" y="44" width="692" height="12" rx="2" fill="#f5f5f5"/>
+<text x="64" y="53" fill="#5a6580" font-size="7" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">PLANT 1 · ON-SITE · DOCKER NETWORK plant · DEMO: DEVICES, FIELD NETWORKS AND DEVICE INTERFACE ARE SIMULATED INSIDE EACH GATEWAY</text>
+<rect x="40" y="1116" width="1344" height="152" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.25)" stroke-width="0.8" stroke-dasharray="4,3"/>
+<rect x="56" y="1120" width="368" height="12" rx="2" fill="#f5f5f5"/>
+<text x="64" y="1129" fill="#5a6580" font-size="7" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">WAN LINK · PLANT TO CENTRAL · DEMO: MM2 JOINS BOTH DOCKER NETWORKS</text>
+<rect x="40" y="1292" width="1344" height="576" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<rect x="56" y="1296" width="252" height="12" rx="2" fill="#f5f5f5"/>
+<text x="64" y="1305" fill="#5a6580" font-size="7" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">CENTRAL DATA CENTRE · DOCKER NETWORK central</text>
+<rect x="1432" y="40" width="368" height="1828" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<rect x="1448" y="44" width="192" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1456" y="53" fill="#5a6580" font-size="7" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">CONTROL ROOM · DOCKER NETWORK ops</text>
+<rect x="40" y="1892" width="1760" height="304" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<rect x="56" y="1896" width="352" height="12" rx="2" fill="#f5f5f5"/>
+<text x="64" y="1905" fill="#5a6580" font-size="7" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">DATA OPERATIONS · WHO WRITES AND READS EACH STORE, WHEN AND HOW</text>
+<!-- Connectors (behind boxes) -->
+<line x1="184" y1="196" x2="184" y2="244" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="448" y1="196" x2="448" y2="244" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="712" y1="196" x2="712" y2="244" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="976" y1="196" x2="976" y2="244" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="1240" y1="196" x2="1240" y2="244" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="214" y1="404" x2="214" y2="452" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="546" y1="404" x2="546" y2="452" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="878" y1="404" x2="878" y2="452" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="1210" y1="404" x2="1210" y2="452" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="184" y1="592" x2="184" y2="640" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="184" y1="864" x2="184" y2="940" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="448" y1="592" x2="448" y2="640" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="448" y1="864" x2="448" y2="940" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="712" y1="592" x2="712" y2="640" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="712" y1="864" x2="712" y2="940" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="976" y1="592" x2="976" y2="640" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="976" y1="864" x2="976" y2="940" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="1240" y1="592" x2="1240" y2="640" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="1240" y1="864" x2="1240" y2="940" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="712" y1="1064" x2="712" y2="1148" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="712" y1="1244" x2="712" y2="1324" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="448" y1="1448" x2="448" y2="1504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="448" y1="1664" x2="448" y2="1720" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="976" y1="1448" x2="976" y2="1504" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="976" y1="1664" x2="976" y2="1720" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<line x1="1616" y1="184" x2="1616" y2="240" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<line x1="1456" y1="816" x2="1360" y2="816" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<line x1="1456" y1="840" x2="1360" y2="840" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<line x1="1456" y1="1002" x2="1372" y2="1002" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<line x1="1456" y1="1386" x2="1372" y2="1386" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<line x1="1456" y1="1584" x2="1216" y2="1584" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<line x1="1456" y1="1782" x2="1372" y2="1782" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<!-- Arrow labels -->
+<rect x="192.0" y="214.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="228.0" y="223.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<rect x="456.0" y="214.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="492.0" y="223.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<rect x="720.0" y="214.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="756.0" y="223.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<rect x="984.0" y="214.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1020.0" y="223.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<rect x="1248.0" y="214.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1284.0" y="223.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<rect x="222.0" y="422.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="266.0" y="431.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">OPC UA, MODBUS</text>
+<rect x="554.0" y="422.0" width="64" height="12" rx="2" fill="#f5f5f5"/>
+<text x="586.0" y="431.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">MQTT :8883</text>
+<rect x="886.0" y="422.0" width="56" height="12" rx="2" fill="#f5f5f5"/>
+<text x="914.0" y="431.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">BLE GATT</text>
+<rect x="1218.0" y="422.0" width="64" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1250.0" y="431.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">MODBUS RTU</text>
+<rect x="192.0" y="610.0" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="234.0" y="619.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FORWARD + ACK</text>
+<rect x="192.0" y="896.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="236.0" y="905.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="456.0" y="610.0" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="498.0" y="619.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FORWARD + ACK</text>
+<rect x="456.0" y="896.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="500.0" y="905.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="720.0" y="610.0" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="762.0" y="619.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FORWARD + ACK</text>
+<rect x="720.0" y="896.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="764.0" y="905.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="984.0" y="610.0" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1026.0" y="619.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FORWARD + ACK</text>
+<rect x="984.0" y="896.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1028.0" y="905.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="1248.0" y="610.0" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1290.0" y="619.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FORWARD + ACK</text>
+<rect x="1248.0" y="896.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1292.0" y="905.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="720.0" y="1100.0" width="72" height="12" rx="2" fill="#f5f5f5"/>
+<text x="756.0" y="1109.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">FETCH :9092</text>
+<rect x="720.0" y="1278.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="764.0" y="1287.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ACKS=ALL :9092</text>
+<rect x="456.0" y="1470.0" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="494.0" y="1479.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">POLL BATCHES</text>
+<rect x="456.0" y="1686.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="500.0" y="1695.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">1 TX PER BATCH</text>
+<rect x="984.0" y="1470.0" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1022.0" y="1479.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">POLL BATCHES</text>
+<rect x="984.0" y="1686.0" width="88" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1028.0" y="1695.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">1 TX PER BATCH</text>
+<rect x="1624.0" y="206.0" width="60" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1654.0" y="215.0" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">HTTP /API</text>
+<rect x="1370.0" y="796" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1408.0" y="805" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">GET /METRICS</text>
+<rect x="1366.0" y="848" width="84" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1408.0" y="857" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">POST /CONTROL</text>
+<rect x="1376.0" y="982" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1414.0" y="991" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ADMIN + TAIL</text>
+<rect x="1376.0" y="1366" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1414.0" y="1375" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">ADMIN + TAIL</text>
+<rect x="1298.0" y="1564" width="76" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1336.0" y="1573" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">GET /METRICS</text>
+<rect x="1384.0" y="1762" width="60" height="12" rx="2" fill="#f5f5f5"/>
+<text x="1414.0" y="1771" fill="#5a6580" font-size="8" letter-spacing="0.06em" font-family="'Geist Mono', monospace" text-anchor="middle">SQL READS</text>
+<!-- Nodes -->
+<rect x="64" y="72" width="240" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="72" width="240" height="124" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="76" y="80" width="68" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.9)" stroke-opacity="0.5" stroke-width="0.8"/><text x="110.0" y="89" fill="rgba(90,101,128,0.9)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<g transform="translate(274,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -4" /> <path d="M12 2v2" /> <path d="M9 12v9" /> <path d="M15 12v9" /> <path d="M5 16l4 -2" /> <path d="M15 14l4 2" /> <path d="M9 18h6" /> <path d="M10 8v.01" /> <path d="M14 8v.01" /></svg></g>
+<text x="76" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">PRS · Press shop</text>
+<text x="76" y="126" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">30 stamping presses</text>
+<text x="76" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">50 conveyors · 20 AGVs</text>
+<text x="76" y="154" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PLC controllers · id e.g. P1-PRS-S001</text>
+<rect x="76" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="76" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(81,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="116" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">30</text>
+<rect x="132" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="132" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(137,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="172" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">20</text>
+<rect x="188" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="188" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(193,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="228" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">18</text>
+<rect x="244" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="244" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(249,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="284" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">32</text>
+<rect x="328" y="72" width="240" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="72" width="240" height="124" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="340" y="80" width="68" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.9)" stroke-opacity="0.5" stroke-width="0.8"/><text x="374.0" y="89" fill="rgba(90,101,128,0.9)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<g transform="translate(538,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -4" /> <path d="M12 2v2" /> <path d="M9 12v9" /> <path d="M15 12v9" /> <path d="M5 16l4 -2" /> <path d="M15 14l4 2" /> <path d="M9 18h6" /> <path d="M10 8v.01" /> <path d="M14 8v.01" /></svg></g>
+<text x="340" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">BDY · Body shop</text>
+<text x="340" y="126" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">80 weld robots</text>
+<text x="340" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">10 conveyors · 10 AGVs</text>
+<text x="340" y="154" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PLC controllers · id e.g. P1-BDY-W042</text>
+<rect x="340" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="340" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(345,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="380" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">74</text>
+<rect x="396" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="396" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(401,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="436" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">10</text>
+<rect x="452" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="452" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(457,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="492" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">4</text>
+<rect x="508" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="508" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(513,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="548" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">12</text>
+<rect x="592" y="72" width="240" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="72" width="240" height="124" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="604" y="80" width="68" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.9)" stroke-opacity="0.5" stroke-width="0.8"/><text x="638.0" y="89" fill="rgba(90,101,128,0.9)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<g transform="translate(802,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -4" /> <path d="M12 2v2" /> <path d="M9 12v9" /> <path d="M15 12v9" /> <path d="M5 16l4 -2" /> <path d="M15 14l4 2" /> <path d="M9 18h6" /> <path d="M10 8v.01" /> <path d="M14 8v.01" /></svg></g>
+<text x="604" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">PNT · Paint shop</text>
+<text x="604" y="126" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">40 paint booths</text>
+<text x="604" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">50 conveyors · 10 AGVs</text>
+<text x="604" y="154" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PLC controllers · id e.g. P1-PNT-B007</text>
+<rect x="604" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="604" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(609,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="644" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">28</text>
+<rect x="660" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="660" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(665,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="700" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">10</text>
+<rect x="716" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="716" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(721,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="756" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">21</text>
+<rect x="772" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="772" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(777,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="812" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">41</text>
+<rect x="856" y="72" width="240" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="72" width="240" height="124" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="868" y="80" width="68" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.9)" stroke-opacity="0.5" stroke-width="0.8"/><text x="902.0" y="89" fill="rgba(90,101,128,0.9)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<g transform="translate(1066,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -4" /> <path d="M12 2v2" /> <path d="M9 12v9" /> <path d="M15 12v9" /> <path d="M5 16l4 -2" /> <path d="M15 14l4 2" /> <path d="M9 18h6" /> <path d="M10 8v.01" /> <path d="M14 8v.01" /></svg></g>
+<text x="868" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">MCH · Machining</text>
+<text x="868" y="126" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">70 CNC machines</text>
+<text x="868" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">20 conveyors · 10 AGVs</text>
+<text x="868" y="154" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PLC controllers · id e.g. P1-MCH-C017</text>
+<rect x="868" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="868" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(873,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="908" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">46</text>
+<rect x="924" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="924" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(929,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="964" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">10</text>
+<rect x="980" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="980" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(985,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="1020" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">9</text>
+<rect x="1036" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="1036" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1041,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="1076" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">35</text>
+<rect x="1120" y="72" width="240" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="72" width="240" height="124" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<rect x="1132" y="80" width="68" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.9)" stroke-opacity="0.5" stroke-width="0.8"/><text x="1166.0" y="89" fill="rgba(90,101,128,0.9)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">100 DEVICES</text>
+<g transform="translate(1330,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -4" /> <path d="M12 2v2" /> <path d="M9 12v9" /> <path d="M15 12v9" /> <path d="M5 16l4 -2" /> <path d="M15 14l4 2" /> <path d="M9 18h6" /> <path d="M10 8v.01" /> <path d="M14 8v.01" /></svg></g>
+<text x="1132" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">ASM · Assembly</text>
+<text x="1132" y="126" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">60 conveyors</text>
+<text x="1132" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">40 AGVs</text>
+<text x="1132" y="154" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PLC controllers · id e.g. P1-ASM-V031</text>
+<rect x="1132" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="1132" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1137,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="1172" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">14</text>
+<rect x="1188" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="1188" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1193,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="1228" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">40</text>
+<rect x="1244" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="1244" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1249,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="1284" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">19</text>
+<rect x="1300" y="166" width="48" height="20" rx="6" fill="#f5f5f5"/>
+<rect x="1300" y="166" width="48" height="20" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1305,169) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="1340" y="180" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">27</text>
+<rect x="52" y="244" width="1320" height="160" rx="6" fill="#f5f5f5"/>
+<rect x="52" y="244" width="1320" height="160" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="64" y="252" width="144" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="136.0" y="261" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">FIELD NETWORKS · PRODUCTION</text>
+<text x="64" y="280" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Plant field networks · one network per medium, shared by all five shops</text>
+<text x="64" y="294" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every device joins exactly one; each shop&#x27;s split is on its chips above · controllers keep minutes of history for re-reads</text>
+<rect x="64" y="304" width="300" height="88" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="304" width="300" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(338,310) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="74" y="321" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">RJ45 Ethernet LAN</text>
+<text x="74" y="335" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">industrial switches · Cat6 · 1 Gbit/s</text>
+<text x="74" y="347" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">OPC UA :4840 · Modbus TCP :502</text>
+<text x="74" y="359" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">presses · robots · CNC · booths · conveyors</text>
+<text x="74" y="371" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">192 devices</text>
+<text x="74" y="383" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PRS 30 · BDY 74 · PNT 28 · MCH 46 · ASM 14</text>
+<rect x="396" y="304" width="300" height="88" rx="6" fill="#f5f5f5"/>
+<rect x="396" y="304" width="300" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(670,310) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="406" y="321" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Wi-Fi 6</text>
+<text x="406" y="335" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">access points · 802.11ax · WPA3-Enterprise</text>
+<text x="406" y="347" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">MQTT over TLS :8883 · QoS 1</text>
+<text x="406" y="359" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">AGVs: they move, so no cable</text>
+<text x="406" y="371" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">90 devices</text>
+<text x="406" y="383" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PRS 20 · BDY 10 · PNT 10 · MCH 10 · ASM 40</text>
+<rect x="728" y="304" width="300" height="88" rx="6" fill="#f5f5f5"/>
+<rect x="728" y="304" width="300" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1002,310) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="738" y="321" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Bluetooth LE 5</text>
+<text x="738" y="335" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">BLE receivers · 10–30 m range</text>
+<text x="738" y="347" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">GATT notifications every 1 s</text>
+<text x="738" y="359" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">battery vibration sensors on conveyors</text>
+<text x="738" y="371" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">71 devices</text>
+<text x="738" y="383" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PRS 18 · BDY 4 · PNT 21 · MCH 9 · ASM 19</text>
+<rect x="1060" y="304" width="300" height="88" rx="6" fill="#f5f5f5"/>
+<rect x="1060" y="304" width="300" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1334,310) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="1070" y="321" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Serial · RS-485 / RS-232</text>
+<text x="1070" y="335" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">multidrop buses · serial device servers</text>
+<text x="1070" y="347" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">Modbus RTU · 19,200 baud · polled</text>
+<text x="1070" y="359" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">conveyor drives · older robots, CNC</text>
+<text x="1070" y="371" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">147 devices</text>
+<text x="1070" y="383" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PRS 32 · BDY 12 · PNT 41 · MCH 35 · ASM 27</text>
+<rect x="52" y="452" width="1320" height="140" rx="6" fill="#f5f5f5"/>
+<rect x="52" y="452" width="1320" height="140" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="64" y="460" width="156" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="142.0" y="469" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">DEVICE INTERFACE · PRODUCTION</text>
+<g transform="translate(1342,458) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4a2 2 0 0 0 -2 2v3a2 3 0 0 1 -2 3a2 3 0 0 1 2 3v3a2 2 0 0 0 2 2" /> <path d="M17 4a2 2 0 0 1 2 2v3a2 3 0 0 0 2 3a2 3 0 0 0 -2 3v3a2 2 0 0 1 -2 2" /></svg></g>
+<text x="64" y="488" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Unified device interface · one listener per medium</text>
+<text x="64" y="502" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">normalises every frame to one reading: machine_id · device_time · signals · routes by id prefix (P1-BDY-… → gateway-bdy)</text>
+<text x="64" y="514" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">forwards to the shop&#x27;s gateway and retries until the gateway acks; holds nothing, so a gap is re-read from controller history</text>
+<rect x="64" y="524" width="300" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="524" width="300" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(338,530) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="74" y="541" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Ethernet listener</text>
+<text x="74" y="555" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">OPC UA subscriptions · Modbus TCP polls</text>
+<text x="74" y="567" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">1 s sampling per device</text>
+<rect x="396" y="524" width="300" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="396" y="524" width="300" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(670,530) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="406" y="541" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">MQTT listener</text>
+<text x="406" y="555" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">subscribes plant1/+/+/readings · TLS</text>
+<text x="406" y="567" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">QoS 1 · persistent session</text>
+<rect x="728" y="524" width="300" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="728" y="524" width="300" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1002,530) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="738" y="541" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">BLE listener</text>
+<text x="738" y="555" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">GATT notify per sensor MAC</text>
+<text x="738" y="567" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">reconnects on its own</text>
+<rect x="1060" y="524" width="300" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1060" y="524" width="300" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<g transform="translate(1334,530) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="1070" y="541" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Serial poller</text>
+<text x="1070" y="555" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">one Modbus RTU master per bus</text>
+<text x="1070" y="567" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">1 s poll · CRC checked</text>
+<rect x="64" y="640" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="640" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="76" y="648" width="116" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="134.0" y="657" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">EDGE GATEWAY · ACTIVE</text>
+<g transform="translate(274,646) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="76" y="676" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-prs-a</text>
+<text x="76" y="690" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Gateway · .NET 11</text>
+<text x="76" y="702" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">collector → buffer → sender · backfill</text>
+<text x="76" y="716" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-prs-a-data → /data</text>
+<rect x="64" y="752" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="752" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<rect x="76" y="760" width="48" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="100.0" y="769" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STANDBY</text>
+<g transform="translate(274,758) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="76" y="788" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-prs-b</text>
+<text x="76" y="802" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">lease: gateway.lease.prs · 1 partition</text>
+<text x="76" y="814" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">static member · session 6 s</text>
+<text x="76" y="838" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-prs-b-data → /data</text>
+<rect x="328" y="640" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="640" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="340" y="648" width="116" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="398.0" y="657" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">EDGE GATEWAY · ACTIVE</text>
+<g transform="translate(538,646) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="340" y="676" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-bdy-a</text>
+<text x="340" y="690" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Gateway · .NET 11</text>
+<text x="340" y="702" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">collector → buffer → sender · backfill</text>
+<text x="340" y="716" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-bdy-a-data → /data</text>
+<rect x="328" y="752" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="752" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<rect x="340" y="760" width="48" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="364.0" y="769" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STANDBY</text>
+<g transform="translate(538,758) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="340" y="788" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-bdy-b</text>
+<text x="340" y="802" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">lease: gateway.lease.bdy · 1 partition</text>
+<text x="340" y="814" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">static member · session 6 s</text>
+<text x="340" y="838" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-bdy-b-data → /data</text>
+<rect x="592" y="640" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="640" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="604" y="648" width="116" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="662.0" y="657" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">EDGE GATEWAY · ACTIVE</text>
+<g transform="translate(802,646) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="604" y="676" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-pnt-a</text>
+<text x="604" y="690" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Gateway · .NET 11</text>
+<text x="604" y="702" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">collector → buffer → sender · backfill</text>
+<text x="604" y="716" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-pnt-a-data → /data</text>
+<rect x="592" y="752" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="752" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<rect x="604" y="760" width="48" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="628.0" y="769" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STANDBY</text>
+<g transform="translate(802,758) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="604" y="788" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-pnt-b</text>
+<text x="604" y="802" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">lease: gateway.lease.pnt · 1 partition</text>
+<text x="604" y="814" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">static member · session 6 s</text>
+<text x="604" y="838" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-pnt-b-data → /data</text>
+<rect x="856" y="640" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="640" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="868" y="648" width="116" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="926.0" y="657" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">EDGE GATEWAY · ACTIVE</text>
+<g transform="translate(1066,646) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="868" y="676" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-mch-a</text>
+<text x="868" y="690" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Gateway · .NET 11</text>
+<text x="868" y="702" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">collector → buffer → sender · backfill</text>
+<text x="868" y="716" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-mch-a-data → /data</text>
+<rect x="856" y="752" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="752" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<rect x="868" y="760" width="48" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="892.0" y="769" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STANDBY</text>
+<g transform="translate(1066,758) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="868" y="788" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-mch-b</text>
+<text x="868" y="802" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">lease: gateway.lease.mch · 1 partition</text>
+<text x="868" y="814" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">static member · session 6 s</text>
+<text x="868" y="838" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-mch-b-data → /data</text>
+<rect x="1120" y="640" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="640" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1132" y="648" width="116" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="1190.0" y="657" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">EDGE GATEWAY · ACTIVE</text>
+<g transform="translate(1330,646) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="1132" y="676" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-asm-a</text>
+<text x="1132" y="690" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Gateway · .NET 11</text>
+<text x="1132" y="702" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">collector → buffer → sender · backfill</text>
+<text x="1132" y="716" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-asm-a-data → /data</text>
+<rect x="1120" y="752" width="240" height="100" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="752" width="240" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<rect x="1132" y="760" width="48" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="1156.0" y="769" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STANDBY</text>
+<g transform="translate(1330,758) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="1132" y="788" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">gateway-asm-b</text>
+<text x="1132" y="802" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">lease: gateway.lease.asm · 1 partition</text>
+<text x="1132" y="814" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">static member · session 6 s</text>
+<text x="1132" y="838" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">vol gateway-asm-b-data → /data</text>
+<rect x="52" y="940" width="1320" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="52" y="940" width="1320" height="124" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1.2"/>
+<rect x="64" y="948" width="84" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.85)" stroke-opacity="0.5" stroke-width="0.8"/><text x="106.0" y="957" fill="rgba(191,69,32,0.85)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">BROKER · KRAFT</text>
+<g transform="translate(1342,946) scale(0.75)" color="#bf4520"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-8 4l8 4l8 -4l-8 -4" /> <path d="M4 12l8 4l8 -4" /> <path d="M4 16l8 4l8 -4" /></svg></g>
+<text x="64" y="976" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">plant-kafka · Apache Kafka 4.4</text>
+<text x="64" y="990" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">apache/kafka:4.4.0 · broker + controller (KRaft) · 1 GB, heap 512 MB · vol plant-kafka-data · topics made at start by plant-topics (one-shot)</text>
+<rect x="64" y="1000" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="1000" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="74" y="1017" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">machine.readings</text>
+<text x="74" y="1031" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">12 partitions · key machine_id</text>
+<text x="74" y="1043" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">JSON value · CloudEvents ce_* headers</text>
+<rect x="328" y="1000" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="1000" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="338" y="1017" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">machine.alarms</text>
+<text x="338" y="1031" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">3 partitions · key machine_id</text>
+<text x="338" y="1043" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">own topic, so alarms never queue</text>
+<rect x="592" y="1000" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="1000" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="602" y="1017" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Listeners</text>
+<text x="602" y="1031" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">:9092 plant net · :19092 host</text>
+<text x="602" y="1043" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">:9093 KRaft controller</text>
+<rect x="856" y="1000" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="1000" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="866" y="1017" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Durability</text>
+<text x="866" y="1031" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">prod: 3 brokers · RF 3 · min ISR 2</text>
+<text x="866" y="1043" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">demo: 1 broker · RF 1</text>
+<rect x="1120" y="1000" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="1000" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1130" y="1017" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Retention</text>
+<text x="1130" y="1031" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">prod: 7 days ≈ 302 GB per broker</text>
+<text x="1130" y="1043" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">demo: 3 h · producers lz4</text>
+<rect x="552" y="1148" width="320" height="96" rx="6" fill="#f5f5f5"/>
+<rect x="552" y="1148" width="320" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="564" y="1156" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="586.0" y="1165" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">MIRROR</text>
+<g transform="translate(842,1154) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /> <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg></g>
+<text x="564" y="1184" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">mm2 · MirrorMaker 2</text>
+<text x="564" y="1198" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">apache/kafka:4.4.0 · connect-mirror-maker.sh · 768 MB</text>
+<text x="564" y="1210" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">at-least-once · renames to plant1.machine.*</text>
+<text x="564" y="1222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">offset-syncs on target · errors.tolerance=none</text>
+<rect x="52" y="1324" width="1320" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="52" y="1324" width="1320" height="124" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="64" y="1332" width="84" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="106.0" y="1341" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">BROKER · KRAFT</text>
+<g transform="translate(1342,1330) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-8 4l8 4l8 -4l-8 -4" /> <path d="M4 12l8 4l8 -4" /> <path d="M4 16l8 4l8 -4" /></svg></g>
+<text x="64" y="1360" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">central-kafka · Apache Kafka 4.4</text>
+<text x="64" y="1374" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">apache/kafka:4.4.0 · broker + controller (KRaft) · 1 GB, heap 512 MB · vol central-kafka-data · topics created by MirrorMaker 2</text>
+<rect x="64" y="1384" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="1384" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="74" y="1401" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">plant1.machine.readings</text>
+<text x="74" y="1415" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">12 partitions · copied by mm2</text>
+<text x="74" y="1427" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-readings reads it</text>
+<rect x="328" y="1384" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="1384" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="338" y="1401" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">plant1.machine.alarms</text>
+<text x="338" y="1415" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">3 partitions · copied by mm2</text>
+<text x="338" y="1427" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-alarms reads it</text>
+<rect x="592" y="1384" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="1384" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="602" y="1401" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">MirrorMaker 2 state</text>
+<text x="602" y="1415" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2-offsets · mm2-configs</text>
+<text x="602" y="1427" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2-status · offset-syncs</text>
+<rect x="856" y="1384" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="1384" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="866" y="1401" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Listeners</text>
+<text x="866" y="1415" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">:9092 central net · :29092 host</text>
+<text x="866" y="1427" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">:9093 KRaft controller</text>
+<rect x="1120" y="1384" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="1384" width="240" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1130" y="1401" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Durability · retention</text>
+<text x="1130" y="1415" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">prod: 3 brokers · RF 3 · 3 days</text>
+<text x="1130" y="1427" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">demo: 1 broker · 3 h</text>
+<rect x="208" y="1504" width="480" height="160" rx="6" fill="#f5f5f5"/>
+<rect x="208" y="1504" width="480" height="160" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="220" y="1512" width="72" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="256.0" y="1521" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STORE WRITER</text>
+<g transform="translate(658,1510) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="220" y="1540" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">consumer-1</text>
+<text x="220" y="1554" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Consumer · .NET 11 · Confluent.Kafka + Npgsql · 256 MB</text>
+<text x="220" y="1566" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">offsets stored after the DB commit, sent every 5 s · :8080 /metrics</text>
+<rect x="220" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="220" y="1576" width="220" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="230" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Readings loop</text>
+<text x="230" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-readings</text>
+<text x="230" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.readings$</text>
+<text x="230" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤5,000 records or 200 ms</text>
+<text x="230" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">cap 1,000 rows/s</text>
+<rect x="456" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="456" y="1576" width="220" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="466" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Alarms loop</text>
+<text x="466" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-alarms</text>
+<text x="466" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.alarms$</text>
+<text x="466" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤100 records or 50 ms</text>
+<text x="466" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">never capped</text>
+<rect x="736" y="1504" width="480" height="160" rx="6" fill="#f5f5f5"/>
+<rect x="736" y="1504" width="480" height="160" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="748" y="1512" width="72" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="784.0" y="1521" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">STORE WRITER</text>
+<g transform="translate(1186,1510) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /> <path d="M12 12l8 -4.5" /> <path d="M12 12l0 9" /> <path d="M12 12l-8 -4.5" /> <path d="M16 5.25l-8 4.5" /></svg></g>
+<text x="748" y="1540" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">consumer-2</text>
+<text x="748" y="1554" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Consumer · .NET 11 · Confluent.Kafka + Npgsql · 256 MB</text>
+<text x="748" y="1566" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">offsets stored after the DB commit, sent every 5 s · :8080 /metrics</text>
+<rect x="748" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="748" y="1576" width="220" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="758" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Readings loop</text>
+<text x="758" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-readings</text>
+<text x="758" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.readings$</text>
+<text x="758" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤5,000 records or 200 ms</text>
+<text x="758" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">cap 1,000 rows/s</text>
+<rect x="984" y="1576" width="220" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="984" y="1576" width="220" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="994" y="1593" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Alarms loop</text>
+<text x="994" y="1607" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">group central-alarms</text>
+<text x="994" y="1619" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">^plant[0-9]+\.machine\.alarms$</text>
+<text x="994" y="1631" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">≤100 records or 50 ms</text>
+<text x="994" y="1643" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">never capped</text>
+<rect x="52" y="1720" width="1320" height="124" rx="6" fill="#f5f5f5"/>
+<rect x="52" y="1720" width="1320" height="124" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1.2"/>
+<rect x="64" y="1728" width="52" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.85)" stroke-opacity="0.5" stroke-width="0.8"/><text x="90.0" y="1737" fill="rgba(191,69,32,0.85)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">DATABASE</text>
+<g transform="translate(1342,1726) scale(0.75)" color="#bf4520"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" /> <path d="M4 6v6a8 3 0 0 0 16 0v-6" /> <path d="M4 12v6a8 3 0 0 0 16 0v-6" /></svg></g>
+<text x="64" y="1756" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">central-db · PostgreSQL 18</text>
+<text x="64" y="1770" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">postgres:18.6-alpine · :5432 (host 55432) · 256 MB, shared_buffers 64 MB · synchronous_commit=on · vol central-db-data → /var/lib/postgresql</text>
+<rect x="64" y="1780" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="64" y="1780" width="240" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="74" y="1797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">readings</text>
+<text x="74" y="1811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PK (machine_id, seq)</text>
+<text x="74" y="1823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">index on device_time</text>
+<rect x="328" y="1780" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="328" y="1780" width="240" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="338" y="1797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">alarms</text>
+<text x="338" y="1811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PK (machine_id, alarm_seq)</text>
+<text x="338" y="1823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">kind · severity · value</text>
+<rect x="592" y="1780" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="592" y="1780" width="240" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="602" y="1797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">machine_progress</text>
+<text x="602" y="1811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PK machine_id</text>
+<text x="602" y="1823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">stored · max_seq · max time</text>
+<rect x="856" y="1780" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="856" y="1780" width="240" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="866" y="1797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">ingest_totals</text>
+<text x="866" y="1811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PK (stream, writer_id)</text>
+<text x="866" y="1823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">received · inserted</text>
+<rect x="1120" y="1780" width="240" height="56" rx="6" fill="#f5f5f5"/>
+<rect x="1120" y="1780" width="240" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="1130" y="1797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">rejected_records</text>
+<text x="1130" y="1811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">PK (topic, partition, offset)</text>
+<text x="1130" y="1823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">raw bytes · parse error</text>
+<rect x="1456" y="72" width="320" height="112" rx="6" fill="#f5f5f5"/>
+<rect x="1456" y="72" width="320" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1468" y="80" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="1482.0" y="89" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">WEB</text>
+<g transform="translate(1746,78) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10" /> <path d="M7 20h10" /> <path d="M9 16v4" /> <path d="M15 16v4" /></svg></g>
+<text x="1468" y="108" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">dashboard</text>
+<text x="1468" y="122" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">nginx:1.30-alpine-slim · :4000 · 64 MB</text>
+<text x="1468" y="134" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">React 19 · Vite 8 · TypeScript 7 · Tailwind 4</text>
+<text x="1468" y="146" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">Recharts 3 · TanStack Query, polls every 1 s</text>
+<text x="1468" y="158" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">nginx proxies /api/* to api:8080</text>
+<text x="1468" y="170" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">browser opens http://localhost:4000</text>
+<rect x="1456" y="240" width="320" height="1604" rx="6" fill="#f5f5f5"/>
+<rect x="1456" y="240" width="320" height="1604" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="1468" y="248" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.8)" stroke-opacity="0.5" stroke-width="0.8"/><text x="1482.0" y="257" fill="rgba(45,49,66,0.8)" font-size="7" letter-spacing="0.08em" font-family="'Geist Mono', monospace" text-anchor="middle">API</text>
+<g transform="translate(1746,246) scale(0.75)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19l16 0" /> <path d="M4 15l4 -6l4 2l4 -5l4 4" /></svg></g>
+<text x="1468" y="276" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">api · control-room API</text>
+<text x="1468" y="290" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">EventDrivenDesign.Api · .NET 11</text>
+<text x="1468" y="302" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">ASP.NET Core minimal API · :8080</text>
+<text x="1468" y="314" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">256 MB · joins plant, central and ops</text>
+<rect x="1468" y="780" width="296" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="780" width="296" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1478" y="797" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Gateways ×10 (5 pairs) · HTTP</text>
+<text x="1478" y="811" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">GET gateway-*:8080/metrics · 1 s</text>
+<text x="1478" y="823" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">POST gateway-*:8080/control</text>
+<text x="1478" y="835" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">Pause · Resume · InjectFault</text>
+<rect x="1468" y="964" width="296" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="964" width="296" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1478" y="981" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Plant Kafka · AdminClient</text>
+<text x="1478" y="995" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">end offsets per partition · 2 s</text>
+<text x="1478" y="1007" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">tail: newest device time</text>
+<text x="1478" y="1019" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">tail: the last 50 alarms</text>
+<rect x="1468" y="1132" width="296" height="88" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="1132" width="296" height="88" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1478" y="1149" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Computes</text>
+<text x="1478" y="1163" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">health: poll age &lt;3 s ok, &lt;10 s degraded</text>
+<text x="1478" y="1175" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">drain ETA = backlog ÷ (drain − live)</text>
+<text x="1478" y="1187" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">watermark: oldest gap-free device time</text>
+<text x="1478" y="1199" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">proof: generated = stored, 0 gaps</text>
+<rect x="1468" y="1348" width="296" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="1348" width="296" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1478" y="1365" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Central Kafka · AdminClient</text>
+<text x="1478" y="1379" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">end and committed offsets · 2 s</text>
+<text x="1478" y="1391" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">tail: newest mirrored device time</text>
+<text x="1478" y="1403" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mirror lag = plant − central time</text>
+<rect x="1468" y="1546" width="296" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="1546" width="296" height="76" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+<text x="1478" y="1563" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">Consumers ×2 · HTTP</text>
+<text x="1478" y="1577" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">GET consumer-*:8080/metrics · 1 s</text>
+<text x="1478" y="1589" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">received · inserted · rejected</text>
+<text x="1478" y="1601" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">assigned partitions · rates</text>
+<rect x="1468" y="1744" width="296" height="76" rx="6" fill="#f5f5f5"/>
+<rect x="1468" y="1744" width="296" height="76" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="1478" y="1761" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">PostgreSQL · Npgsql</text>
+<text x="1478" y="1775" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">reads only, every 2 s</text>
+<text x="1478" y="1787" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">proof · chart buckets · alarms</text>
+<text x="1478" y="1799" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">never writes a reading</text>
+<!-- Notes, callout, ledger -->
+<text x="64" y="1184" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">WAN 100 Mbit/s: a 6-hour backlog</text>
+<text x="64" y="1198" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">(10.8 GB) copies in about 15 minutes.</text>
+<text x="64" y="1222" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">Drill wan-cut: docker network disconnect</text>
+<text x="64" y="1236" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">edd_plant edd-mm2-1</text>
+<text x="912" y="1176" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">Central or WAN down? Plant Kafka keeps</text>
+<text x="912" y="1194" fill="#2d3142" font-size="14" font-style="italic" font-family="'Instrument Serif', serif" text-anchor="start">taking every write for up to 7 days.</text>
+<path d="M 1148,1162 Q 1176,1128 1188,1068" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="1188" cy="1066" r="2" fill="#2d3142"/>
+<text x="64" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">#</text>
+<text x="92" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">STORE</text>
+<text x="268" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">OBJECT</text>
+<text x="468" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">WRITTEN BY</text>
+<text x="708" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">WHEN · HOW</text>
+<text x="1132" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">READ BY</text>
+<text x="1332" y="1932" fill="#5a6580" font-size="7" font-weight="500" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">WHEN · WHY</text>
+<line x1="64" y1="1940" x2="1776" y2="1940" stroke="rgba(45,49,66,0.20)" stroke-width="0.8"/>
+<text x="64" y="1958" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">1</text>
+<text x="92" y="1958" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">buffer.db (SQLite)</text>
+<text x="268" y="1958" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">outbox · insert</text>
+<text x="468" y="1958" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">gateway writer thread (only writer)</text>
+<text x="708" y="1958" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every 1 s tick: INSERT the tick&#x27;s readings and alarms in 1 tx, fsync</text>
+<text x="1132" y="1958" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">gateway sender</text>
+<text x="1332" y="1958" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">SELECT … ORDER BY lane, id LIMIT 1,000 (5,000 when catching up)</text>
+<text x="64" y="1978" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">2</text>
+<text x="268" y="1978" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">outbox · delete</text>
+<text x="468" y="1978" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">gateway writer thread</text>
+<text x="708" y="1978" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">after each delivery report: DELETE the acknowledged ids, never before</text>
+<text x="1132" y="1978" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">—</text>
+<text x="1332" y="1978" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">—</text>
+<text x="64" y="1998" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">3</text>
+<text x="268" y="1998" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">machine_state</text>
+<text x="468" y="1998" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">gateway writer thread</text>
+<text x="708" y="1998" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">same tx as the tick: last_seq, last_alarm_seq, last_device_time_ms</text>
+<text x="1132" y="1998" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every lease assignment</text>
+<text x="1332" y="1998" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">reconcile with plant Kafka, then backfill; resume numbering</text>
+<line x1="64" y1="2004" x2="1776" y2="2004" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="64" y="2018" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">4</text>
+<text x="92" y="2018" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">plant-kafka</text>
+<text x="268" y="2018" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">machine.readings · .alarms</text>
+<text x="468" y="2018" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">5 active gateways (producers)</text>
+<text x="708" y="2018" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">continuous: acks=all, idempotent, key = machine_id, lz4</text>
+<text x="1132" y="2018" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2 · api tail</text>
+<text x="1332" y="2018" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2 copies from its saved offset; the api reads the newest device time</text>
+<line x1="64" y1="2024" x2="1776" y2="2024" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="64" y="2038" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">5</text>
+<text x="92" y="2038" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">central-kafka</text>
+<text x="268" y="2038" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">plant1.machine.*</text>
+<text x="468" y="2038" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2</text>
+<text x="708" y="2038" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">continuous, at-least-once, with the plant1. prefix</text>
+<text x="1132" y="2038" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">consumers · api tail</text>
+<text x="1332" y="2038" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">2 consumer groups poll batches; the api reads the newest mirrored time</text>
+<text x="64" y="2058" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">6</text>
+<text x="268" y="2058" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2-offsets · offset-syncs</text>
+<text x="468" y="2058" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2</text>
+<text x="708" y="2058" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">after each produce acknowledgement</text>
+<text x="1132" y="2058" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">mm2 at restart</text>
+<text x="1332" y="2058" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">resume the copy; anything re-copied is absorbed by the DB key</text>
+<text x="64" y="2078" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">7</text>
+<text x="268" y="2078" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">__consumer_offsets</text>
+<text x="468" y="2078" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">consumers</text>
+<text x="708" y="2078" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">stored after the DB commit, sent every 5 s</text>
+<text x="1132" y="2078" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">consumers at restart</text>
+<text x="1332" y="2078" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">resume; anything redelivered is absorbed by the DB key</text>
+<line x1="64" y1="2084" x2="1776" y2="2084" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="64" y="2098" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">8</text>
+<text x="92" y="2098" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="start">central-db (PostgreSQL)</text>
+<text x="268" y="2098" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">readings</text>
+<text x="468" y="2098" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">consumer readings loop</text>
+<text x="708" y="2098" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">per batch ≤5,000: INSERT … SELECT unnest(…) ON CONFLICT DO NOTHING</text>
+<text x="1132" y="2098" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">api</text>
+<text x="1332" y="2098" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every 2 s: readings per 5 s bucket, by device_time</text>
+<text x="64" y="2118" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">9</text>
+<text x="268" y="2118" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">machine_progress</text>
+<text x="468" y="2118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">same tx, as a CTE</text>
+<text x="708" y="2118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">stored += inserted · max_seq · max_device_time</text>
+<text x="1132" y="2118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">api</text>
+<text x="1332" y="2118" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every 2 s: missing = generated − stored; gaps; watermark</text>
+<text x="64" y="2138" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">10</text>
+<text x="268" y="2138" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">ingest_totals</text>
+<text x="468" y="2138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">same tx</text>
+<text x="708" y="2138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">received += batch size · inserted += rows inserted</text>
+<text x="1132" y="2138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">api</text>
+<text x="1332" y="2138" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every 2 s: duplicates absorbed = received − inserted</text>
+<text x="64" y="2158" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">11</text>
+<text x="268" y="2158" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">alarms</text>
+<text x="468" y="2158" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">consumer alarms loop</text>
+<text x="708" y="2158" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">per batch ≤100: INSERT … ON CONFLICT (machine_id, alarm_seq) DO NOTHING</text>
+<text x="1132" y="2158" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">api</text>
+<text x="1332" y="2158" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">every 2 s: recent alarms, latency = stored_at − device_time</text>
+<text x="64" y="2178" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">12</text>
+<text x="268" y="2178" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">rejected_records</text>
+<text x="468" y="2178" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">readings loop, same tx</text>
+<text x="708" y="2178" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">a record that fails to parse, with topic, partition, offset</text>
+<text x="1132" y="2178" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">api</text>
+<text x="1332" y="2178" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="start">rejected count on the dashboard</text>
+<!-- Legend -->
+<line x1="40" y1="2228" x2="1800" y2="2228" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="40" y="2248" fill="#4f5d75" font-size="8" letter-spacing="0.14em" font-family="'Geist Mono', monospace" text-anchor="start">LEGEND</text>
+<rect x="40" y="2256" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<text x="60" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Focal: plant Kafka and the central DB</text>
+<rect x="277" y="2256" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="297" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Container</text>
+<rect x="371" y="2256" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+<text x="391" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Durable store or file</text>
+<rect x="526" y="2256" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+<text x="546" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Devices (input)</text>
+<rect x="650" y="2256" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="670" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Production only: simulated in the demo</text>
+<rect x="892" y="2256" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-dasharray="6,4"/>
+<text x="912" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Standby</text>
+<rect x="976" y="2256" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+<text x="996" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Inside a container</text>
+<line x1="1116" y1="2261" x2="1140" y2="2261" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+<text x="1148" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Data flow</text>
+<line x1="1222" y1="2261" x2="1246" y2="2261" stroke="#2e5aa8" stroke-width="1" marker-end="url(#arrow-link)"/>
+<text x="1254" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">HTTP call</text>
+<line x1="1328" y1="2261" x2="1352" y2="2261" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<text x="1360" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Passive read</text>
+<g transform="translate(1449,2255) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10h-4v3h-8v-3h-4z" /> <path d="M7.5 9v3" /> <path d="M10.5 9v3" /> <path d="M13.5 9v3" /> <path d="M16.5 9v3" /></svg></g>
+<text x="1467" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">RJ45 LAN</text>
+<g transform="translate(1536,2255) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18l.01 0" /> <path d="M9.172 15.172a4 4 0 0 1 5.656 0" /> <path d="M6.343 12.343a8 8 0 0 1 11.314 0" /> <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0" /></svg></g>
+<text x="1554" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Wi-Fi</text>
+<g transform="translate(1608,2255) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l10 8l-5 4l0 -16l5 4l-10 8" /></svg></g>
+<text x="1626" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Bluetooth</text>
+<g transform="translate(1700,2255) scale(0.5)" color="#4f5d75"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2.5 9h-13z" /> <path d="M6.5 10h.01" /> <path d="M9.25 10h.01" /> <path d="M12 10h.01" /> <path d="M14.75 10h.01" /> <path d="M17.5 10h.01" /> <path d="M8 13h.01" /> <path d="M10.7 13h.01" /> <path d="M13.3 13h.01" /> <path d="M16 13h.01" /></svg></g>
+<text x="1718" y="2264" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" text-anchor="start">Serial</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

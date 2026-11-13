@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# pre-commit: format the staged C# files with CSharpier and re-stage them.
+#
+# Installed by src/scripts/git/install-hooks.sh (git config core.hooksPath).
+# Only files that are fully staged are reformatted. A file with both staged
+# and unstaged changes is left alone (re-staging it would sweep in the
+# unstaged hunks) and the commit stops with a message instead.
+# Bypass in an emergency with: git commit --no-verify
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel)
+
+# A pathspec '*' also matches '/', so this covers every .cs file under src/backend/.
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- 'src/backend/*.cs')
+[[ -z "$staged" ]] && exit 0
+
+partial=""
+for f in $staged; do
+  if ! git diff --quiet -- "$f"; then partial+="$f "; fi
+done
+if [[ -n "$partial" ]]; then
+  echo "pre-commit: these C# files have unstaged changes too; stage or stash them, then commit again:" >&2
+  echo "  $partial" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC2086  # paths are repo-relative and space-free in this repo
+"$ROOT/src/scripts/build/format.sh" $staged >/dev/null
+# shellcheck disable=SC2086
+git add -- $staged

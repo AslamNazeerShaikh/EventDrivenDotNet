@@ -1,0 +1,79 @@
+/*
+ * index.css: global styles for the dashboard.
+ *
+ * Imported once, by main.tsx. It does four things:
+ *   1. loads Tailwind, which generates the utility classes used in the .tsx files;
+ *   2. defines the fonts and the colour theme as Tailwind tokens (see the list below);
+ *   3. sets the page background, text colour, font and tabular digits;
+ *   4. draws a clear keyboard focus ring and calms motion for people who ask for less.
+ * Everything else is styled with Tailwind classes in the components.
+ */
+@import "tailwindcss";
+
+/*
+ * Theme tokens. Tailwind turns each --color-* name into utilities, so --color-panel is used as
+ * bg-panel, border-panel and so on, and --color-muted as text-muted. Recharts takes colours as
+ * props, so the chart panels pass var(--color-...) strings that point at the same tokens.
+ *   ink         : page background, and the background of inputs
+ *   panel       : background of a panel card
+ *   raised      : background of a box inside a card, such as a pipeline stage
+ *   line        : borders and dividers
+ *   line-strong : the border of a control on hover
+ *   fg          : main text
+ *   muted       : secondary text, such as labels and captions
+ *   ok, warn    : status green and amber (text, dots and borders)
+ *   bad         : status red for dots, borders and bars
+ *   bad-fg      : a lighter red for small text, so it keeps a 4.5:1 contrast on the cards
+ *   info        : the one accent: settled chart bars, the live rate line, the focus ring
+ * Geist is the text font and Geist Mono the font for ids, times and figures (index.html loads both).
+ * The fallbacks keep the page readable on a laptop with no network.
+ */
+@theme {
+  --font-sans:
+    "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono:
+    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-ink: #0f172a;
+  --color-panel: #1b2336;
+  --color-raised: #272f42;
+  --color-line: #334155;
+  --color-line-strong: #475569;
+  --color-fg: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-ok: #22c55e;
+  --color-warn: #f59e0b;
+  --color-bad: #ef4444;
+  --color-bad-fg: #f87171;
+  --color-info: #38bdf8;
+}
+
+/* Page-wide base. Tabular digits keep every changing number from shifting sideways each second. */
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An accent ring on the controls when reached by keyboard, so focus is always easy to see. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+/* For readers who ask the system for less motion, hover and focus changes happen at once. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -1,93 +1,222 @@
 # EventDrivenDotNet
 
-Production-style event-driven reference in .NET 11 and Kafka 4.4 (KRaft): two producers publish domain events, two consumers sink them into SQLite (WAL), with a command API, delivery-proof endpoint, and React dashboard — all in one Docker image.
-Append-only event log, idempotent consumers with DLQ isolation, and end-to-end tests (xUnit.net v3 + Playwright) demonstrating exactly-once-effect semantics.
+Event-driven proof in .NET 11 and Kafka 4.4 for a plant scenario: about 500 machines stream readings while the central server is down for hours, and nothing may be lost or duplicated. Each of the five shops runs an active/standby pair of edge gateways that buffer on disk (if the active one dies, the standby takes over within seconds), a plant Kafka cluster rides out the outage, MirrorMaker 2 copies to a central cluster, and PostgreSQL stores each reading exactly once through a unique `(machine_id, seq)` key. Everything runs on one laptop with Docker Compose, with failure drills and a dashboard that proves zero loss and zero duplicates per machine.
 
-```mermaid
-flowchart LR
-    subgraph Whole["system boundary · everything inside one container · Browser is the only external"]
-    Browser(["Browser<br/>React SPA · EXTERNAL"]) -->|HTTP :3000| Nginx
-    subgraph Docker["docker · edd-demo · one image · supervisord PID 1"]
-        direction LR
-        subgraph Edge["edge tier"]
-            direction TB
-            Nginx["nginx :3000<br/>serves React build · proxies /api"] -->|proxy /api → :8080| API
-            API["Command API :8080<br/>minimal API · SSE /api/stream<br/>start · stop · rate per producer"]
-            SUP["supervisord · PID 1<br/>8 programs · restarts · unified logs"]
-        end
-        subgraph Prod["producers · .NET 11 · 100ms ticks · acks=all"]
-            direction TB
-            PA["producer-a :7101<br/>OrderPlaced · CloudEvents"]
-            PB["producer-b :7102<br/>PaymentCaptured"]
-        end
-        subgraph Kafka["Kafka 4.4 KRaft · :9092 PLAINTEXT · :9093 controller<br/>heap 512M · Java 17+ · Confluent.Kafka 2.15.x"]
-            direction TB
-            TCMD["control.commands<br/>1 part · compacted"]
-            TEVT["demo.events<br/>6 parts · key entity-id · 24h<br/>idempotent · lz4"]
-            TACK["control.acks<br/>1 part · 1h"]
-            TBRT["telemetry.heartbeats<br/>1 part · 1h"]
-            TDLQ["demo.events.dlq<br/>1 part · 7d · poison only"]
-        end
-        subgraph Cons["consumers · group event-sinks · batch ≤500 / 50ms"]
-            direction TB
-            CA["consumer-a :7201<br/>CooperativeSticky"]
-            CB["consumer-b :7202<br/>CooperativeSticky"]
-        end
-        subgraph Store["/data volume · SQLite WAL · 1 writer each"]
-            direction TB
-            DBA[("sink-a.db<br/>rows before offsets")]
-            DBB[("sink-b.db<br/>INSERT OR IGNORE event_id")]
-        end
-        LOG["container stdout<br/>supervisord unifies all 8 · 10s HEALTHCHECK"]
-        PRF["delivery proof<br/>Gen ≥ Acked = Bus ≥ Committed ≤ Persisted · gaps 0"]
-        PUB["published: 3000 · 8080 · 9092 · 7101/02 · 7201/02<br/>internal only: 9093 controller"]
-    end
-    API -->|COMMANDS ×2| TCMD
-    TCMD -->|COMMANDS · own group each| PA
-    PA -->|EVENTS · OrderPlaced| TEVT
-    PB -->|EVENTS · PaymentCaptured| TEVT
-    TEVT -->|EVENTS| CA
-    TEVT ==>|EVENTS| CB
-    TACK -->|ACKS| API
-    TBRT -.->|HEARTBEATS ×5| API
-    CA -->|SQL BATCH| DBA
-    CB -->|SQL BATCH| DBB
-    CA -.->|POISON| TDLQ
-    CB -.->|POISON| TDLQ
-    API -.->|READ-ONLY| DBA
-    API -.->|READ-ONLY| DBB
-    SUP -.->|manages| LOG
-    API -.->|proves| PRF
-    Nginx ~~~ PA ~~~ TCMD ~~~ CA ~~~ DBA
-    end
-    classDef ext fill:#0f172a,stroke:#94a3b8,color:#e2e8f0
-    classDef edge fill:#082f3f,stroke:#22d3ee,color:#fff
-    classDef api fill:#06302a,stroke:#34d399,color:#fff
-    classDef svc fill:#06302a,stroke:#34d399,color:#fff
-    classDef bus fill:#3a2408,stroke:#fb923c,color:#fff
-    classDef dlq fill:#3d0f22,stroke:#fb7185,color:#fff
-    classDef db fill:#2a1560,stroke:#a78bfa,color:#fff
-    classDef ops fill:#0f172a,stroke:#64748b,color:#94a3b8
-    classDef prf fill:#3a2a08,stroke:#fbbf24,color:#fff
-    class Browser ext
-    class Nginx edge
-    class API api
-    class SUP,LOG,PUB ops
-    class TCMD,TEVT,TACK,TBRT bus
-    class TDLQ dlq
-    class PA,PB,CA,CB svc
-    class DBA,DBB db
-    class PRF prf
-    style Docker fill:transparent
-    style Edge fill:transparent
-    style Prod fill:transparent
-    style Kafka fill:transparent
-    style Cons fill:transparent
-    style Store fill:transparent
-    style Whole fill:transparent,stroke:#94a3b8,stroke-width:2px
+![Plant to central: every container, port and data store](docs/diagrams/01-plant-to-central.svg)
+
+![The control-room dashboard, full page: header, KPI strip, pipeline, all 21 containers with CPU, memory, disk and ports, buffers, readings chart, live throughput, proof, gateways, Kafka and database, alarms and alarm mix](docs/screenshots/dashboard.png)
+
+The control room at <http://localhost:4000>, captured live at 2560 px wide (a full-screen browser on a 2560×1440 display) with `bun src/scripts/live/capture-dashboard.ts`.
+
+| # | Document | What it holds |
+| --- | --- | --- |
+| 1 | [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md) | Build spec for the demo: containers, contracts, services, drills, tests, build plan |
+| 2 | [`docs/01-second-round-design-exercise.md`](docs/01-second-round-design-exercise.md) | The exercise brief and what it asks |
+| 3 | [`docs/02-solution-design.md`](docs/02-solution-design.md) | The solution design: architecture, the twelve aspects, sizing, trade-offs |
+| 4 | [`docs/03-implementation-plan.md`](docs/03-implementation-plan.md) | The task-by-task build plan |
+| 5 | [`docs/04-build-progress.md`](docs/04-build-progress.md) | What is built, what is left, and the test counts |
+| 6 | [`docs/05-run-and-operate.md`](docs/05-run-and-operate.md) | **How to build, start, stop, test and present the demo**, where to see each piece of data, manual tests, troubleshooting, and the dashboard panel by panel |
+
+## Run the demo
+
+### Prerequisites
+
+1. Docker Desktop with its memory set to 10 GB (the 21 containers' limits add up to about 7.3 GB).
+2. `bash`, `curl` and `python3` for the drill and proof scripts.
+3. The .NET SDK 11.0.100 and Bun 1.4.4 only to develop or run the tests.
+
+### Start
+
+From the repo root:
+
+```sh
+cd src/deployment
+docker compose down -v                  # optional: a cold start from empty volumes
+docker compose up -d --build --wait
 ```
 
-Full game plan (decisions, contracts, diagrams, build phases, demo script): [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md).
+Every service reports healthy or running, and `plant-topics` exits 0 after creating the topics. Open the control room at <http://localhost:4000> and give it a minute: five shops healthy, each tile naming its active gateway (`-a` or `-b`), about 500 readings per second.
+
+### Drills
+
+Run these from `src/deployment/` (the script works from anywhere). Each one prints the Docker command it runs, so the panel sees what is being broken.
+
+| # | Command | What the panel sees |
+| --- | --- | --- |
+| 1 | `scripts/drill.sh central-down` | Central Kafka, the consumers and the database go Down. The plant keeps writing, and its alarms stay live. Mirror lag grows |
+| 2 | `scripts/drill.sh central-up` | Mirror lag clears in seconds, then the database drains as its ETA counts down. The chart's gap fills in |
+| 3 | `scripts/drill.sh failover BDY` | The shop's active gateway is killed; the standby takes over within about 15 s and the script prints how long it took. The killed one returns as the standby, with no second switch |
+| 4 | `scripts/drill.sh kill-gateway BDY` | The active gateway is killed and restarted at once; the standby takes the lease and the restarted one rejoins as the standby. Sequence numbers continue and missed seconds are backfilled |
+| 5 | `scripts/drill.sh lose-gateway-disk BDY` | The active gateway's disk is deleted; the rebuilt instance continues numbering from the plant log, with 0 gaps |
+| 6 | `scripts/drill.sh kill-consumer 1` | The consumer group rebalances and the redelivered batch is absorbed |
+| 7 | `scripts/drill.sh wan-cut` / `wan-restore`, `plant-down` / `plant-up` | Mirror lag, or the gateway buffers, grow and then clear |
+| 8 | `scripts/drill.sh pause` / `resume` | Stops or restarts all simulated machines |
+
+To show the alarm lane, inject an alarm during the drain: `../scripts/live/api.sh fault P1-MCH-C017 Vibration`. It reaches central within seconds.
+
+After `central-up`, the store writers resume in about 45 s and the backlog drains in about as long as the outage lasted.
+
+### The proof
+
+```sh
+scripts/drill.sh proof
+```
+
+It pauses the plant, waits until every buffer and lag is drained, then prints the reconciliation and exits 0 on PASS. PASS means, for every machine, generated equals stored, with 0 gaps, no stored sequence beyond what was generated (`over` 0) and 0 duplicate rows. The duplicates-absorbed count shows how many redeliveries the unique `(machine_id, seq)` key swallowed. While anything is still buffered or lagging, the verdict is WAIT, never PASS.
+
+### Stop
+
+```sh
+docker compose down        # keeps the volumes; add -v to delete them
+```
+
+### More
+
+1. [`src/scripts/README.md`](src/scripts/README.md): the developer and agent scripts (tests, API calls, screenshots).
+2. [`docs/00-edd-demo-game-plan.md`](docs/00-edd-demo-game-plan.md) section 14 is the 12-minute demo script and section 10 lists every drill.
+3. [`docs/01-second-round-design-exercise.md`](docs/01-second-round-design-exercise.md), [`docs/02-solution-design.md`](docs/02-solution-design.md), [`docs/03-implementation-plan.md`](docs/03-implementation-plan.md) and [`docs/04-build-progress.md`](docs/04-build-progress.md) hold the brief, the design, the plan and the progress.
+
+## Backend codebase
+
+![Backend codebase: three hosts, three adapters and three core projects, with every file's classes, records, methods, routes, events and idempotency points](docs/diagrams/09-backend-codebase.svg)
+
+Editable source: [`docs/diagrams/09-backend-codebase.html`](docs/diagrams/09-backend-codebase.html), generated by [`src/scripts/diagrams/gen_codebase.py`](src/scripts/diagrams/gen_codebase.py).
+
+`src/backend/EventDrivenDesign.slnx` holds nine projects and two test projects. They follow Clean Architecture and DDD:
+
+- **Hosts** are the executables. Each one starts at its `Program.cs`.
+- **Adapters** do the I/O: Kafka settings, SQLite, PostgreSQL and HTTP plumbing.
+- **Core** holds records, rules and the Result type, with no I/O.
+
+References only point inward: a host references adapters and core, an adapter references core, and core references nothing outside itself.
+
+Every project inherits the same settings from `Directory.Build.props`:
+
+- .NET 11 and C# 15;
+- nullable reference types on;
+- warnings treated as errors;
+- package versions managed centrally in `Directory.Packages.props`.
+
+### Projects and layers
+
+| # | Project | Layer | References | Files and the types they declare |
+| --- | --- | --- | --- | --- |
+| 1 | `EventDrivenDesign.Gateway` | Host (10 containers, `gateway-<shop>-a`/`-b`) | Contracts, Domain, Shared, Messaging, Persistence, Infrastructure | `Program.cs` (start point, the term), `Collector`, `CollectorService`, `Sender` + `SenderState`, `GatewayControl`, `GatewayLease` + `LeaseTerm` + `LeaseDecision`, `PlantLogReader` |
+| 2 | `EventDrivenDesign.Consumer` | Host (`consumer-1`, `consumer-2`) | Contracts, Messaging, Persistence, Infrastructure | `Program.cs`, `ConsumerLoops`, `LoopService`, `BatchLoop<T>` + `ConsumerStats`, `RateCap` + `RateMeter`, `RecordValidation` |
+| 3 | `EventDrivenDesign.Api` | Host (`api-1`, `api-2` behind nginx) | Contracts, Domain, Shared, Messaging, Persistence, Infrastructure | `Program.cs` (routes, `FaultRequest`), `Pollers`, `Snapshot` + `Stamped<T>` + `OffsetSample` + `DbSample`, `KafkaWatcher`, `OverviewBuilder`, `ApiRoutes` |
+| 4 | `EventDrivenDesign.Infrastructure` | Adapter (ASP.NET Core) | Contracts, Shared | `HostingExtensions`, `GlobalExceptionHandler : IExceptionHandler`, `ResultHttpExtensions`, `ProcessSampler` |
+| 5 | `EventDrivenDesign.Messaging` | Adapter (Confluent.Kafka) | Contracts | `KafkaConfigs` (Producer, StoreWriter, Lease, Tail, Admin), `CloudEvents`, `Retry` |
+| 6 | `EventDrivenDesign.Persistence` | Adapter (Microsoft.Data.Sqlite, Npgsql) | Contracts, Domain | `GatewayBuffer` + `OutboxRow`, `MachineState`, `LogPosition`, `TickBatch`, `BufferStats`, `Lane`; `CentralStore` + `RejectedRecord`; `CentralQueries` |
+| 7 | `EventDrivenDesign.Domain` | Core | Contracts | `MachineCatalog` + `MachineType`, `MachineInfo`; `Signals` + `SignalSpec`; `MachineSimulator` + `SimTick`, `AlarmEvent`; `Proof` + `ProgressRow` |
+| 8 | `EventDrivenDesign.Contracts` | Core | none | `MachineReading`, `MachineAlarm`, `AlarmKind`; `union GatewayCommand` (`Pause`, `Resume`, `InjectFault`); `closed record ServiceHealth` (`Healthy`, `Degraded`, `Down`); `GatewayMetrics`, `ConsumerMetrics`, `ProcessStats`; the API models; `TopicNames`; `Json` (source-generated) |
+| 9 | `EventDrivenDesign.Shared` | Core | none | `Result`, `Result<T>` (record structs with `Success`, `Failure`, `Match`), `Error(Code, Message, Kind)`, `ErrorKind` (`Invalid`, `NotFound`, `Unavailable`) |
+| 10 | `tests/EventDrivenDesign.Tests` | Unit tests (170) | every project | xUnit v3, AwesomeAssertions, `FakeTimeProvider`; 19 test files |
+| 11 | `tests/EventDrivenDesign.IntegrationTests` | Integration tests (19) | Gateway, Messaging, Persistence | Testcontainers Kafka and PostgreSQL: `CentralStore`, `CentralQueries`, `Sender`, `PlantLogReader`, `GatewayLease` |
+
+### From start point to end point
+
+| # | Flow | Path through the code |
+| --- | --- | --- |
+| 1 | A reading | `CollectorService` ticks every second → `Collector.Tick` (seq + 1 per machine) → `GatewayBuffer.WriteTickAsync` (outbox, one SQLite transaction) → `Sender.RunAsync`: `ReadOldest` → produce to `machine.readings` → `DeleteAsync` after the ack → MirrorMaker 2 → `plant1.machine.readings` → `BatchLoop<MachineReading>.Run` → `CentralStore.InsertReadingsAsync` → table `readings` → `CentralQueries` → `/api/overview`, `/api/chart`, `/api/reconciliation` |
+| 2 | An alarm | `MachineSimulator.Next` raises an `AlarmEvent` → the outbox's alarm lane, which `Sender` reads first → `machine.alarms` → `plant1.machine.alarms` → `CentralStore.InsertAlarmsAsync` → table `alarms` → `/api/alarms` |
+| 3 | Pause or resume | `POST /api/plant/pause` → `FanOut` → `POST /control` on all 10 gateways → `GatewayControl.ApplyAsync` → `GatewayBuffer.SetPausedAsync` → `202`, or ProblemDetails naming the gateways not reached |
+| 4 | A fault | `POST /api/machines/{machineId}/faults` → `ApiRoutes.GatewayFor` (the shop's active gateway) → `POST /control` with `InjectFault` → `Collector.InjectFault` → the next ticks breach a threshold and raise an alarm |
+| 5 | A gateway failover | The lease partition moves → `GatewayLease` stops the old term (collector stopped, sender drained) → the new holder fences, runs `PlantLogReader.ReconcileBufferAsync`, `Collector.Resume`, `MarkActive`, `CollectorService` (backfill first) and `Sender.RunAsync` |
+| 6 | The proof | `GET /api/reconciliation` → `Pollers.RefreshDbAsync` → `OverviewBuilder.Reconcile` → `Proof.Reconcile` per machine → PASS only when paused, drained and 0 missing, 0 gaps, 0 over |
+
+### HTTP endpoints
+
+| # | Host | Route | Handler | Returns |
+| --- | --- | --- | --- | --- |
+| 1 | Api | `GET /api/overview` | `OverviewBuilder.Build(Snapshot)` | `Overview`: gateway, cluster, consumer and database tiles, rates, ETA |
+| 2 | Api | `GET /api/reconciliation[?full=true]` | `OverviewBuilder.Reconcile`, `CentralQueries.DuplicateRowsAsync` when `full` | `Reconciliation` with `MachineProof[]`, verdict PASS, WAIT or FAIL |
+| 3 | Api | `GET /api/chart?minutes=10` | `CentralQueries.ChartAsync` | `Chart` with `ChartPoint[]`, by device time |
+| 4 | Api | `GET /api/alarms` | `CentralQueries.RecentAlarmsAsync` | `AlarmView[]` with latency |
+| 5 | Api | `POST /api/plant/pause`, `/api/plant/resume` | `FanOut(GatewayCommand)` | `202`, or `503` ProblemDetails |
+| 6 | Api | `POST /api/machines/{machineId}/faults` | `ApiRoutes.GatewayFor` → gateway `/control` | `202`, `400`, `404` or `503` |
+| 7 | Gateway | `GET /metrics`, `POST /control`, `GET /healthz` | lambdas over `Collector`, `GatewayBuffer`, `Sender`; `GatewayControl.ApplyAsync` | `GatewayMetrics`; `Result` → `202` or ProblemDetails |
+| 8 | Consumer | `GET /metrics`, `GET /healthz` | `ConsumerStats` | `ConsumerMetrics` |
+
+Errors are values, not exceptions:
+
+- Handlers return `Result`, and `ResultHttpExtensions.ToHttpResult` maps `ErrorKind` to 400, 404 or 503 ProblemDetails, with `title` = the error code and `detail` = its message.
+- A query against a database that is down returns `api.database.unavailable` after 2 s. The full duplicate scan gets 60 s.
+- Anything unexpected reaches `GlobalExceptionHandler` and becomes a 500.
+
+### Events and stores
+
+| # | Store | Written by (create, update, delete) | Read by |
+| --- | --- | --- | --- |
+| 1 | Kafka `machine.readings` (12 partitions, 8 h) and `machine.alarms` (3 partitions, kept for good), key `machine_id`, CloudEvents headers | `Sender` (idempotent producer, `acks=all`) | MirrorMaker 2; `PlantLogReader` (rebuilds numbering); `KafkaWatcher` (plant tail) |
+| 2 | Kafka `gateway.lease.<shop>` (1 partition, never written) | nobody | `GatewayLease`: whoever is assigned the partition is the active gateway |
+| 3 | Kafka `plant1.machine.readings`, `plant1.machine.alarms` (central) | MirrorMaker 2 | `BatchLoop<T>` (groups `central-readings`, `central-alarms`); `KafkaWatcher` (lag) |
+| 4 | SQLite `outbox` (one `buffer.db` per gateway) | `WriteTickAsync` inserts; rows are never updated; `DeleteAsync` after the ack, `ReconcileAsync` for rows the log already holds | `ReadOldest`, `Stats` |
+| 5 | SQLite `machine_state`, `gateway_state` | `WriteTickAsync` (upsert), `ReconcileAsync`, `SetPausedAsync` | `LoadState`, `LoadPaused` |
+| 6 | PostgreSQL `readings` PK `(machine_id, seq)`, `alarms` PK `(machine_id, alarm_seq)` | `CentralStore`: `INSERT … ON CONFLICT DO NOTHING`; never updated or deleted | `CentralQueries.ChartAsync`, `RecentAlarmsAsync`, `DuplicateRowsAsync` |
+| 7 | PostgreSQL `machine_progress`, `ingest_totals` | `CentralStore`, upserted in the same transaction as the rows | `CentralQueries.ProgressAsync`, `TotalsAsync` |
+| 8 | PostgreSQL `rejected_records` PK `(topic, kafka_partition, kafka_offset)` | `CentralStore`, for records `RecordValidation` refuses | `psql`; the consumer counts rejects in `/metrics` |
+
+### Idempotency, hop by hop
+
+| # | Repeat that can happen | What makes it harmless | Code |
+| --- | --- | --- | --- |
+| 1 | History re-read after a restart | Backfill skips samples at or before `last_device_time_ms` | `Collector.Backfill` |
+| 2 | Pause, resume or a fault sent twice | A persisted flag; a fault on a faulted signal is ignored | `GatewayControl.ApplyAsync`, `MachineSimulator.InjectFault` |
+| 3 | Producer retry inside one session | Idempotent producer, `acks=all` | `KafkaConfigs.Producer` |
+| 4 | Resend after a gateway restart | `(machine_id, seq)` primary key, `ON CONFLICT DO NOTHING` | `CentralStore.InsertReadingsAsync` |
+| 5 | MirrorMaker 2 copies again after a restart | The same key | `CentralStore` |
+| 6 | A store writer dies after its commit, before its offset | The same key, with the counters in the same transaction | `BatchLoop<T>.Run`, `CentralStore` |
+| 7 | A malformed record delivered twice | `rejected_records` keyed by `(topic, partition, offset)` | `RecordValidation`, `CentralStore` |
+| 8 | Two gateways after a lost lease session | A new term fences the old sender and reconciles from the log before it numbers | `GatewayLease`, `PlantLogReader` |
+
+## Frontend codebase
+
+The full-page dashboard screenshot is at the top of this README, after the architecture diagram.
+
+![Frontend codebase: build and serve, the start chain from index.html to App, every component with its props, the data layer and the nginx routes](docs/diagrams/10-frontend-codebase.svg)
+
+Editable source: [`docs/diagrams/10-frontend-codebase.html`](docs/diagrams/10-frontend-codebase.html), generated by [`src/scripts/diagrams/gen_codebase.py`](src/scripts/diagrams/gen_codebase.py).
+
+The dashboard lives in `src/frontend`. It uses React 19, TypeScript 7 (strict, `tsc -b`), Vite 8, Tailwind 4, TanStack React Query 5 and Recharts 3, and is built and tested with Bun 1.4.4.
+
+- **Build and serve:** the Dockerfile's `web` stage builds `dist/`, and the `dashboard` stage serves it from nginx on port 4000.
+- **Routing:** nginx sends `/api/` to `api-1` and `api-2` (with `ip_hash`, a passive health check and retry on the next API), and every other path to `index.html`.
+- **Data flow:** `api.ts` is the only file that calls the backend. Panels receive their data as props and format it with the pure functions in `format.ts`.
+
+### Files
+
+| # | File | Kind | Exports | Role |
+| --- | --- | --- | --- | --- |
+| 1 | `index.html` | Start point | none | `<div id="root">` and `<script type="module" src="/src/main.tsx">` |
+| 2 | `src/main.tsx` | Bootstrap | none | `createRoot` → `StrictMode` → `QueryClientProvider` → `ErrorBoundary` → `App` |
+| 3 | `src/App.tsx` | Shell | `App` | Runs the four polling queries, `useFullCheck` and `useNow`; shows the API-unreachable banner; puts each panel in its own `ErrorBoundary`, reset when its query updates |
+| 4 | `src/api.ts` | Data layer | the types; `ApiError`; `useOverview`, `useReconciliation`, `useFullCheck`, `useChart`, `useAlarms`, `usePause`, `useResume`, `useInjectFault`; `pause`, `resume`, `injectFault` | Mirrors the C# contracts. `get<T>` and `post` over `fetch`; a non-2xx answer throws `ApiError(code, message)` from ProblemDetails |
+| 5 | `src/format.ts` | Pure logic | `agoText`, `healthLabel`, `instanceLabel`, `isStale`, `formatSeconds`, `formatEta`, `formatInt`, `fillBuckets`, `mirrorHealth`, `shouldRequestFull`, `proofView`, `panelNote` | Every decision the panels make, unit-tested by `format.test.ts` (47 `bun test` tests) |
+| 6 | `src/panels/PipelineStrip.tsx` | Component | `PipelineStrip({ overview, nowMs })` | Machines → Gateways ×5 → Plant Kafka → MirrorMaker 2 → Central Kafka → Consumers ×2 → Database, with a health badge each |
+| 7 | `src/panels/BuffersLag.tsx` | Component | `BuffersLag({ overview })` | One tile per shop, naming its active gateway (`a` or `b`); buffered rows, oldest unsent age; mirror lag, consumer lag, drain ETA |
+| 8 | `src/panels/ReadingsChart.tsx` | Component | `ReadingsChart({ chart, nowMs, note })` | Recharts bar chart of the last 10 minutes by device time; minutes past the watermark are provisional |
+| 9 | `src/panels/ProofPanel.tsx` | Component | `ProofPanel({ proof, full, nowMs, note })` | Verdict, generated, stored, missing, gaps, duplicate rows (full check), duplicates absorbed, per-machine table |
+| 10 | `src/panels/AlarmsPanel.tsx` | Component | `AlarmsPanel({ alarms, paused, note })` | Latest alarms and their latency; Pause, Resume and Inject fault buttons |
+| 11 | `src/panels/ui.tsx` | UI kit | `Panel`, `HealthBadge`, `Stat`, `toneOf` | Shared panel frame, health badge and stat block |
+| 12 | `src/ErrorBoundary.tsx` | Boundary | `ErrorBoundary` (class) | A panel that throws shows its own message; the others keep updating |
+| 13 | `src/useNow.ts` | Hook | `useNow(intervalMs = 1000)` | A one-second clock for "ago" text and the stale check between polls |
+
+### Queries, commands and routes
+
+| # | Hook | Route (through nginx) | When | Used by |
+| --- | --- | --- | --- | --- |
+| 1 | `useOverview` | `GET /api/overview` | every 1 s | `PipelineStrip`, `BuffersLag`, the banner, `paused` |
+| 2 | `useReconciliation` | `GET /api/reconciliation` | every 1 s | `ProofPanel` |
+| 3 | `useFullCheck` | `GET /api/reconciliation?full=true` | on the button, and at most every 10 s while paused and drained | `ProofPanel` (duplicate rows) |
+| 4 | `useChart` | `GET /api/chart?minutes=10` | every 1 s | `ReadingsChart` |
+| 5 | `useAlarms` | `GET /api/alarms` | every 1 s | `AlarmsPanel` |
+| 6 | `usePause`, `useResume` | `POST /api/plant/pause`, `/api/plant/resume` | on click; then every query is invalidated | `AlarmsPanel` |
+| 7 | `useInjectFault` | `POST /api/machines/{machineId}/faults` | on click | `AlarmsPanel` |
+
+Queries poll with `retry: false` and keep their last data on an error. A panel whose query fails says one of two things:
+
+- "Not updating, showing the last data received.", if it had data before;
+- "No data yet. … Retrying every second.", if it never had any. The reason comes from the ProblemDetails `detail`.
 
 ## Approach
 
@@ -107,13 +236,14 @@ Full game plan (decisions, contracts, diagrams, build phases, demo script): [`do
 
 ## Stack
 
-| Area | Choice |
-| --- | --- |
-| Event medium | Apache Kafka 4.4, single-node KRaft |
-| Runtime | .NET 11, C# 15, pure C# dispatch (no MediatR) |
-| Sink | SQLite in WAL mode, one file per consumer |
-| Dashboard | React + Vite + TypeScript behind nginx |
-| Packaging | One image, `supervisord` as PID 1 |
-| Tests | xUnit.net v3; Playwright for .NET for end-to-end |
+| # | Area | Choice |
+| --- | --- | --- |
+| 1 | Event medium | Apache Kafka 4.4 (KRaft): a plant cluster and a central cluster, joined by MirrorMaker 2 |
+| 2 | Edge | Ten .NET gateways, an active/standby pair per shop held by a Kafka consumer-group lease, each with a SQLite store-and-forward buffer (`synchronous=FULL`) |
+| 3 | Store | PostgreSQL 18, primary key `(machine_id, seq)`, `INSERT … ON CONFLICT DO NOTHING` |
+| 4 | Runtime | .NET 11, C# 15, pure C# dispatch (no MediatR) |
+| 5 | Dashboard | React, Vite, TypeScript and Tailwind, built with Bun and served by nginx |
+| 6 | Packaging | Docker Compose; Docker Official Images or Verified Publisher images, plus `apache/kafka` |
+| 7 | Tests | xUnit.net v3 with Testcontainers; Playwright for .NET for end-to-end |
 
 Process: SDD then TDD — each phase is specified (analysis, pitfalls, pros/cons) before code; every implementation step is red-green-refactor. License: [AGPL-3.0](LICENSE.md).

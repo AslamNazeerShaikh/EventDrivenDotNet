@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>EventDrivenDesign.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\EventDrivenDesign.Api\EventDrivenDesign.Api.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Consumer\EventDrivenDesign.Consumer.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Contracts\EventDrivenDesign.Contracts.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Domain\EventDrivenDesign.Domain.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Gateway\EventDrivenDesign.Gateway.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Infrastructure\EventDrivenDesign.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Messaging\EventDrivenDesign.Messaging.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Persistence\EventDrivenDesign.Persistence.csproj" />
+    <ProjectReference Include="..\..\EventDrivenDesign.Shared\EventDrivenDesign.Shared.csproj" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+</Project>
