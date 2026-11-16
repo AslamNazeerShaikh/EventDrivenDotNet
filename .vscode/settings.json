@@ -1,0 +1,11 @@
+{
+  // Workbench
+  // Keep clicked files open in permanent tabs instead of replacing them
+  "workbench.editor.enablePreview": false,
+
+  // Editor readability
+  // Pin the current function or class header to the top while scrolling
+  "editor.stickyScroll.enabled": true,
+  // Color-code matching brackets for easier reading
+  "editor.bracketPairColorization.enabled": true
+}
