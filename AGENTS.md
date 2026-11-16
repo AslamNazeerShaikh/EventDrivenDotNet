@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Safety - readonly by default
+
+- Never run destructive or system-modifying commands without explicit user permission. Ask first and state the exact command and why.
+- Destructive means data loss or force overwrite. Examples are `brew`, `rm -rf`, `git reset --hard`, `git push --force`.
+- System-modifying means persistent change outside the edit tools. Examples are any tool, library, package, software - installs or uninstalls, `chmod` or `chown`, writes outside the repo.
+- Default to readonly commands. Examples are `read`, `grep`, `glob`, `git status`, `git log`, `git diff`, `ls`.
+
 ## Include tables in responses
 
 - When a reply carries comparable numbers, options, or findings a reader would line up by hand, use one or more detailed tables with multiple columns when the table fits.
