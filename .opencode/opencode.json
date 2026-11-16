@@ -8,5 +8,17 @@
     "todo": true,
     "schedules": true
   },
-  "instructions": [".opencode/pstack-models.md"]
+  "instructions": [".opencode/pstack-models.md"],
+  "mcp": {
+    "servers": {
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+      }
+    }
+  }
 }
